@@ -1,0 +1,59 @@
+package ru.wisetree.cirno;
+
+import dev.arbjerg.lavalink.libraries.jda.JDAVoiceUpdateListener;
+import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import ru.wisetree.cirno.commands.*;
+import ru.wisetree.cirno.services.JdaVoiceChannelService;
+
+import java.util.Base64;
+
+public class Main {
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+
+    public static void main(String[] args) throws InterruptedException {
+        String token = System.getenv("BOT_TOKEN");
+        if (token == null) throw new IllegalArgumentException("Токен не найден!");
+
+        // 1. Хак: достаем ID бота из токена (часть до первой точки)
+        String botIdStr = new String(Base64.getDecoder().decode(token.split("\\.")[0]));
+        long botId = Long.parseLong(botIdStr);
+
+        // 2. Инициализируем менеджер (он создаст LavalinkClient)
+        var playerManager = new PlayerManager(botId);
+        var voiceService = new JdaVoiceChannelService();
+
+        var registry = new CommandRegistry();
+        // Передаем клиент напрямую в команду
+        registry.register(
+                new PlayCommand(playerManager, voiceService), // Передаем playerManager целиком
+                new SkipCommand(playerManager),
+                new FlowCommand(playerManager),
+                new BegoneCommand(playerManager),
+                new PauseCommand(playerManager),
+                new StopCommand(playerManager),
+                new ShuffleCommand(playerManager),
+                new QueueCommand(playerManager),
+                new SearchCommand(playerManager, voiceService)
+        );
+
+        var listener = new BotListener(registry, playerManager);
+
+        // 3. Собираем JDA с перехватчиком
+        var jda = JDABuilder
+                .createDefault(token)
+                .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_VOICE_STATES) // Обязательно!
+                .enableCache(CacheFlag.VOICE_STATE) // Обязательно!
+                .setVoiceDispatchInterceptor(new JDAVoiceUpdateListener(playerManager.getClient())) // Магия здесь
+                .addEventListeners(listener)
+                .build();
+
+        jda.awaitReady();
+        log.info("Бот запущен! ID: {}", botId);
+
+        jda.updateCommands().addCommands(registry.getCommandData()).queue();
+    }
+}
