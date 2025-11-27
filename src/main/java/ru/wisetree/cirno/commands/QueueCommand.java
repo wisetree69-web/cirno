@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 
 public class QueueCommand implements Command {
     private final PlayerManager playerManager;
-    // Cirno's favorite color: The Strongest Blue!
     private static final Color CIRNO_BLUE = new Color(153, 204, 255);
 
     public QueueCommand(PlayerManager playerManager) {
@@ -45,18 +44,16 @@ public class QueueCommand implements Command {
         eb.setTitle("⑨ Cirno's FREEZE Queue! 🧊");
         eb.setColor(CIRNO_BLUE);
 
-        // Current Track
         if (current != null) {
             eb.addField("Now Playing (The Strongest!):",
                     "[" + current.getInfo().getTitle() + "](" + current.getInfo().getUri() + ")",
                     false);
         }
 
-        // Queue List (Show first 9)
         StringBuilder sb = new StringBuilder();
         int count = 0;
         for (Track track : queue) {
-            if (count >= 9) break; // Displaying first 9 for The Strongest ⑨
+            if (count >= 9) break;
             count++;
             sb.append(count).append(". ")
                     .append(track.getInfo().getTitle())
@@ -69,7 +66,7 @@ public class QueueCommand implements Command {
             sb.append("... and ").append(queue.size() - 9).append(" more weaklings!");
         }
 
-        if (sb.length() > 0) {
+        if (!sb.isEmpty()) {
             eb.addField("Next up (Don't melt!):", sb.toString(), false);
         } else if (current != null) {
             eb.addField("Next up:", "The queue is empty! Call /flow to summon the ice radio!", false);

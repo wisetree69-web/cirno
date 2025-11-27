@@ -15,17 +15,15 @@ import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.interactions.components.text.TextInput;
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
 import net.dv8tion.jda.api.interactions.modals.Modal;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import ru.wisetree.cirno.services.VoiceChannelService;
 
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public class BotListener extends ListenerAdapter {
-    private static final Logger log = LoggerFactory.getLogger(BotListener.class);
     private final CommandRegistry commandRegistry;
     private final PlayerManager playerManager;
     private final VoiceChannelService voiceService; // <-- Добавили сервис
@@ -36,21 +34,17 @@ public class BotListener extends ListenerAdapter {
         this.voiceService = voiceService;
     }
 
-    // --- ВСПОМОГАТЕЛЬНЫЙ МЕТОД: ПРОВЕРКА И ПОДКЛЮЧЕНИЕ ---
-    private boolean ensureVoiceConnection(Member member, IReplyCallback event) {
+    private boolean ensureVoiceDisconnected(Member member, IReplyCallback event) {
         try {
-            // Эта строчка проверит, в канале ли юзер, и подключит бота
             voiceService.joinMemberChannel(member);
-            return true;
+            return false;
         } catch (Exception e) {
-            // Если юзер не в канале, отвечаем ошибкой (скрытой)
             if (!event.isAcknowledged()) {
                 event.reply("❌ **Baka!** You must be in a voice channel!").setEphemeral(true).queue();
             } else {
-                // Если уже ответили (defer), шлем через хук
                 event.getHook().sendMessage("❌ **Baka!** You must be in a voice channel!").setEphemeral(true).queue();
             }
-            return false;
+            return true;
         }
     }
 
@@ -68,61 +62,57 @@ public class BotListener extends ListenerAdapter {
         var member = event.getMember();
         if (guild == null || member == null) return;
 
-        // 1. Выбор трека из поиска (search:uri)
         if (id.startsWith("search:")) {
-            // Тут тоже нужна проверка, вдруг юзер вышел пока искал
-            if (!ensureVoiceConnection(member, event)) return;
+            if (ensureVoiceDisconnected(member, event)) return;
             handleSearchResultSelection(event, id);
             return;
         }
 
-        // 2. Quick Load
-        if (id.equals("cmd:quick_load")) {
-            // ПРОВЕРКА ВОЙСА ПЕРЕД ОТКРЫТИЕМ МОДАЛКИ
-            if (!ensureVoiceConnection(member, event)) return;
+        switch (id) {
+            case "cmd:quick_load" -> {
+                if (ensureVoiceDisconnected(member, event)) return;
 
-            TextInput input = TextInput.create("query", "URL or Query", TextInputStyle.SHORT)
-                    .setPlaceholder("Paste link or type song name...")
-                    .setRequired(true).build();
-            Modal modal = Modal.create("modal:quick", "Quick Load ⚡").addActionRow(input).build();
-            event.replyModal(modal).queue();
-            return;
+                TextInput input = TextInput.create("query", "URL or Query", TextInputStyle.SHORT)
+                        .setPlaceholder("Paste link or type song name...")
+                        .setRequired(true).build();
+                Modal modal = Modal.create("modal:quick", "Quick Load ⚡").addActionRow(input).build();
+                event.replyModal(modal).queue();
+                return;
+            }
+
+
+            case "cmd:deep_search" -> {
+                if (ensureVoiceDisconnected(member, event)) return;
+
+                StringSelectMenu menu = StringSelectMenu.create("menu:search_source")
+                        .setPlaceholder("Select Music Service")
+                        .addOption("YouTube", "ytsearch:")
+                        .addOption("YouTube Music", "ytmsearch:")
+                        .addOption("Spotify", "spsearch:")
+                        .addOption("SoundCloud", "scsearch:")
+                        .addOption("Deezer", "dzsearch:")
+                        .build();
+
+                event.reply("Choose where to search:").setEphemeral(true)
+                        .addActionRow(menu)
+                        .queue();
+                return;
+            }
+
+
+            case "cmd:begone" -> {
+                event.deferEdit().queue();
+                var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
+                musicManager.getScheduler().clearQueue();
+                event.getMessage().delete().queue();
+
+                guild.getAudioManager().closeAudioConnection();
+                return;
+            }
         }
 
-        // 3. Deep Search (Меню выбора)
-        if (id.equals("cmd:deep_search")) {
-            if (!ensureVoiceConnection(member, event)) return;
-
-            StringSelectMenu menu = StringSelectMenu.create("menu:search_source")
-                    .setPlaceholder("Select Music Service")
-                    .addOption("YouTube", "ytsearch:")
-                    .addOption("YouTube Music", "ytmsearch:")
-                    .addOption("Spotify", "spsearch:")
-                    .addOption("SoundCloud", "scsearch:")
-                    .addOption("Deezer", "dzsearch:")
-                    .build();
-
-            event.reply("Choose where to search:").setEphemeral(true)
-                    .addActionRow(menu)
-                    .queue();
-            return;
-        }
-
-        // 4. Begone
-        if (id.equals("cmd:begone")) {
-            event.deferEdit().queue();
-            var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
-            musicManager.getScheduler().clearQueue();
-            event.getMessage().delete().queue(); // Удаляем дешборд
-            guild.getAudioManager().closeAudioConnection();
-            return;
-        }
-
-        // 5. Управление (Pause, Skip...)
         if (id.startsWith("cmd:")) {
-            // Для паузы/скипа тоже желательно быть в войсе, но не критично для краша
-            // Но лучше проверить, чтобы левые люди не кликали
-            if (!ensureVoiceConnection(member, event)) return;
+            if (ensureVoiceDisconnected(member, event)) return;
 
             event.deferEdit().queue();
             var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
@@ -141,7 +131,6 @@ public class BotListener extends ListenerAdapter {
     @Override
     public void onStringSelectInteraction(StringSelectInteractionEvent event) {
         if (event.getComponentId().equals("menu:search_source")) {
-            // Удаляем меню выбора сервиса, чтобы не висело
             event.getMessage().delete().queue();
 
             String sourcePrefix = event.getValues().getFirst();
@@ -160,13 +149,12 @@ public class BotListener extends ListenerAdapter {
     @Override
     public void onModalInteraction(ModalInteractionEvent event) {
         String id = event.getModalId();
-        String query = event.getValue("query").getAsString();
+        String query = Objects.requireNonNull(event.getValue("query")).getAsString();
         var guild = event.getGuild();
         var member = event.getMember();
         if (guild == null || member == null) return;
 
-        // Финальная проверка войса перед загрузкой
-        // (хотя мы проверяли до модалки, лучше перестраховаться)
+
         try {
             voiceService.joinMemberChannel(member);
         } catch (Exception e) {
@@ -178,35 +166,31 @@ public class BotListener extends ListenerAdapter {
         var dashboard = musicManager.getDashboard();
         var link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
 
-        // --- Quick Load ---
         if (id.equals("modal:quick")) {
-            event.deferEdit().queue(); // Просто закрываем модалку, ничего не пишем в чат
+            event.deferEdit().queue();
             dashboard.addLog("⚡ Quick Load: " + query);
 
             String search = (query.startsWith("http")) ? query : "ytsearch:" + query;
 
             link.loadItem(search).subscribe(result -> {
-                if (result instanceof TrackLoaded) {
-                    TrackLoaded tr = (TrackLoaded) result;
-                    musicManager.getScheduler().enqueue(tr.getTrack());
-                } else if (result instanceof SearchResult) {
-                    SearchResult sr = (SearchResult) result;
-                    if (!sr.getTracks().isEmpty()) {
-                        musicManager.getScheduler().enqueue(sr.getTracks().getFirst());
-                    } else {
-                        dashboard.addError("Nothing found!");
+                switch (result) {
+                    case TrackLoaded tr -> musicManager.getScheduler().enqueue(tr.getTrack());
+                    case SearchResult sr -> {
+                        if (!sr.getTracks().isEmpty()) {
+                            musicManager.getScheduler().enqueue(sr.getTracks().getFirst());
+                        } else {
+                            dashboard.addError("Nothing found!");
+                        }
                     }
-                } else if (result instanceof PlaylistLoaded) {
-                    PlaylistLoaded pl = (PlaylistLoaded) result;
-                    pl.getTracks().forEach(musicManager.getScheduler()::enqueue);
-                    dashboard.addSuccess("Added playlist: " + pl.getInfo().getName());
-                } else {
-                    dashboard.addError("Nothing found!");
+                    case PlaylistLoaded pl -> {
+                        pl.getTracks().forEach(musicManager.getScheduler()::enqueue);
+                        dashboard.addSuccess("Added playlist: " + pl.getInfo().getName());
+                    }
+                    case null, default -> dashboard.addError("Nothing found!");
                 }
             });
         }
 
-        // --- Deep Search ---
         if (id.startsWith("modal:deep:")) {
             event.deferReply().setEphemeral(true).queue();
 
@@ -214,8 +198,7 @@ public class BotListener extends ListenerAdapter {
             String search = sourcePrefix + query;
 
             link.loadItem(search).subscribe(result -> {
-                if (result instanceof SearchResult) {
-                    SearchResult sr = (SearchResult) result;
+                if (result instanceof SearchResult sr) {
                     if (!sr.getTracks().isEmpty()) {
                         sendSearchButtons(event, sr.getTracks(), query);
                     } else {
@@ -240,6 +223,7 @@ public class BotListener extends ListenerAdapter {
         for (int i = 0; i < limit; i++) {
             Track t = tracks.get(i);
             String uri = t.getInfo().getUri();
+            assert uri != null;
             if (uri.length() > 80) continue;
 
             desc.append("**").append(i + 1).append(".** ")
@@ -260,32 +244,25 @@ public class BotListener extends ListenerAdapter {
     private void handleSearchResultSelection(ButtonInteractionEvent event, String id) {
         String uri = id.substring(7);
 
-        // Удаляем меню выбора СРАЗУ
         event.getMessage().delete().queue();
 
         if (uri.equals("cancel")) {
-            // Если отмена - просто удалили и всё, подтверждать не обязательно если сообщение удалено,
-            // но для чистоты можно сделать deferReply, но тогда останется висеть "Bot is thinking".
-            // Лучший вариант для отмены:
-            event.deferEdit().queue(); // Подтвердили нажатие
-            // Сообщение удалится строчкой выше
+            event.deferEdit().queue();
             return;
         }
 
         // Если выбрали трек
         event.deferReply().setEphemeral(true).queue(); // Говорим "думаю..." (скрыто)
 
-        var manager = playerManager.getGuildMusicManager(event.getGuild().getIdLong());
+        var manager = playerManager.getGuildMusicManager(Objects.requireNonNull(event.getGuild()).getIdLong());
         var link = playerManager.getClient().getOrCreateLink(event.getGuild().getIdLong());
 
         link.loadItem(uri).subscribe(res -> {
-            if (res instanceof TrackLoaded) {
-                TrackLoaded tr = (TrackLoaded) res;
+            if (res instanceof TrackLoaded tr) {
                 manager.getScheduler().enqueue(tr.getTrack());
 
-                // Пишем в лог дешборда, а эфемерное сообщение удаляем
                 manager.getDashboard().addSuccess("Selected: " + tr.getTrack().getInfo().getTitle());
-                event.getHook().deleteOriginal().queue(); // Удаляем "Bot is thinking"
+                event.getHook().deleteOriginal().queue();
             }
         });
     }

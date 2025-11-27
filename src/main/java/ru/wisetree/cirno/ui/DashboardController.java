@@ -50,7 +50,6 @@ public class DashboardController {
         if (tickerTask != null && !tickerTask.isCancelled()) return;
 
         tickerTask = executor.scheduleAtFixedRate(() -> {
-            // Обновляем только если что-то играет
             if (scheduler.getCurrentTrack() != null && !scheduler.isPaused()) {
                 requestUpdate();
             }
@@ -67,7 +66,7 @@ public class DashboardController {
     public void addLog(String message) {
         synchronized (logHistory) {
             if (logHistory.size() >= 15) {
-                logHistory.remove(0);
+                logHistory.removeFirst();
             }
             logHistory.add(message);
         }

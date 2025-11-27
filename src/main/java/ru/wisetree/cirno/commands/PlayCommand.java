@@ -49,9 +49,7 @@ public class PlayCommand implements Command {
 
             musicManager.getDashboard().addLog("🔎 /play request: " + query);
 
-            link.loadItem(search).subscribe(result -> {
-                handleResult(musicManager, result, event);
-            });
+            link.loadItem(search).subscribe(result -> handleResult(musicManager, result, event));
 
         } catch (Exception e) {
             event.getHook().sendMessage("Baka! " + e.getMessage()).queue();
@@ -59,33 +57,27 @@ public class PlayCommand implements Command {
     }
 
     private String buildSearchQuery(String query, String sourcePrefix) {
-        // 1. Если это ссылка - источник не важен
         if (query.startsWith("http://") || query.startsWith("https://")) return query;
 
-        // 2. Если пользователь сам написал префикс - не дублируем
         if (query.startsWith("ytsearch:") || query.startsWith("ytmsearch:") ||
                 query.startsWith("scsearch:") || query.startsWith("spsearch:") ||
                 query.startsWith("dzsearch:")) {
             return query;
         }
 
-        // 3. Иначе добавляем выбранный источник
         return sourcePrefix + query;
     }
 
     private void handleResult(GuildMusicManager musicManager, Object result, SlashCommandInteractionEvent event) {
-        if (result instanceof TrackLoaded) {
-            TrackLoaded tr = (TrackLoaded) result;
+        if (result instanceof TrackLoaded tr) {
             musicManager.getScheduler().enqueue(tr.getTrack());
             event.getHook().sendMessage("Added: " + tr.getTrack().getInfo().getTitle()).queue();
 
-        } else if (result instanceof PlaylistLoaded) {
-            PlaylistLoaded pl = (PlaylistLoaded) result;
+        } else if (result instanceof PlaylistLoaded pl) {
             pl.getTracks().forEach(musicManager.getScheduler()::enqueue);
             event.getHook().sendMessage("Added playlist: " + pl.getInfo().getName()).queue();
 
-        } else if (result instanceof SearchResult) {
-            SearchResult sr = (SearchResult) result;
+        } else if (result instanceof SearchResult sr) {
             if (!sr.getTracks().isEmpty()) {
                 var track = sr.getTracks().getFirst();
                 musicManager.getScheduler().enqueue(track);
@@ -97,8 +89,7 @@ public class PlayCommand implements Command {
         } else if (result instanceof NoMatches) {
             event.getHook().sendMessage("No matches found!").queue();
 
-        } else if (result instanceof LoadFailed) {
-            LoadFailed lf = (LoadFailed) result;
+        } else if (result instanceof LoadFailed lf) {
             event.getHook().sendMessage("Error: " + lf.getException().getMessage()).queue();
         }
     }
@@ -107,7 +98,6 @@ public class PlayCommand implements Command {
     public List<OptionData> getOptions() {
         return List.of(
                 new OptionData(OptionType.STRING, "url", "URL or Search Query").setRequired(true),
-                // ВОТ ОНИ, ВСЕ ИСТОЧНИКИ:
                 new OptionData(OptionType.STRING, "source", "Source (Default: YouTube)").setRequired(false)
                         .addChoice("YouTube", "ytsearch:")
                         .addChoice("YouTube Music", "ytmsearch:")

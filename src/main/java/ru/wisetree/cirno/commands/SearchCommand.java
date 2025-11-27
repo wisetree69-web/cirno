@@ -51,8 +51,7 @@ public class SearchCommand implements Command {
             String search = buildSearchQuery(query, sourcePrefix);
 
             link.loadItem(search).subscribe(loadResult -> {
-                if (loadResult instanceof SearchResult) {
-                    SearchResult searchResult = (SearchResult) loadResult;
+                if (loadResult instanceof SearchResult searchResult) {
                     List<Track> tracks = searchResult.getTracks();
 
                     if (tracks.isEmpty()) {
@@ -74,6 +73,7 @@ public class SearchCommand implements Command {
                         String title = track.getInfo().getTitle();
                         String uri = track.getInfo().getUri();
 
+                        assert uri != null;
                         if (uri.length() > 80) continue;
 
                         description.append("**").append(i + 1).append(".** ")
@@ -127,7 +127,6 @@ public class SearchCommand implements Command {
     public List<OptionData> getOptions() {
         return List.of(
                 new OptionData(OptionType.STRING, "query", "What to search for!").setRequired(true),
-                // ВОТ ОНИ, ВСЕ ИСТОЧНИКИ:
                 new OptionData(OptionType.STRING, "source", "Source (Default: YouTube)").setRequired(false)
                         .addChoice("YouTube", "ytsearch:")
                         .addChoice("YouTube Music", "ytmsearch:")

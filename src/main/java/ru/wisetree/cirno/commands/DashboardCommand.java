@@ -30,15 +30,9 @@ public class DashboardCommand implements Command {
             return;
         }
 
-        // 1. Говорим Дискорду "Принято", но скрыто
         event.deferReply().setEphemeral(true).queue(hook -> {
-
             var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
-
-            // 2. Создаем дэшборд
             musicManager.getDashboard().create(channel);
-
-            // 3. Удаляем сообщение "Bot is thinking...", чтобы не мозолило глаза
             hook.deleteOriginal().queue();
         });
     }

@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit;
 public class DashboardRenderer {
 
     private static final Color CIRNO_COLOR = new Color(153, 204, 255);
-    private static final String CIRNO_IMG_IDLE = "https://media.tenor.com/P-Mb-jZqjCYAAAAM/cirno-fumo.gif";
-    private static final String CIRNO_IMG_PLAYING = "https://media.tenor.com/User_P-8Y58AAAAM/touhou-cirno.gif";
+    private static final String CIRNO_IMG_IDLE = "https://media.tenor.com/iPKa5SFvaKAAAAAi/touhou-cirno.gif";
+    // private static final String CIRNO_IMG_PLAYING = "https://media.tenor.com/f4xSIqFf3gwAAAAi/konakonagifs-touhou.gif";
 
     public MessageEditData render(TrackScheduler scheduler, List<String> logEntries) {
         Track current = scheduler.getCurrentTrack();
@@ -25,15 +25,15 @@ public class DashboardRenderer {
 
         EmbedBuilder eb = new EmbedBuilder();
         eb.setColor(CIRNO_COLOR);
+        eb.setThumbnail(CIRNO_IMG_IDLE);
 
         if (current == null) {
             eb.setTitle("⑨ Cirno Music: IDLE");
-            eb.setThumbnail(CIRNO_IMG_IDLE);
             eb.setDescription("❄️ Queue is empty! Use **Quick Load** or **Deep Search** below!");
         } else {
             String statusIcon = isPaused ? "II (FROZEN)" : "▶ (PLAYING)";
             eb.setTitle("⑨ " + statusIcon + ": " + current.getInfo().getTitle(), current.getInfo().getUri());
-            eb.setThumbnail(current.getInfo().getArtworkUrl() != null ? current.getInfo().getArtworkUrl() : CIRNO_IMG_PLAYING);
+            //eb.setImage(current.getInfo().getArtworkUrl() != null ? current.getInfo().getArtworkUrl() : CIRNO_IMG_PLAYING);
             eb.setDescription(buildProgressBar(scheduler));
             eb.addField("Author", current.getInfo().getAuthor(), true);
             eb.addField("Source", current.getInfo().getSourceName(), true);
@@ -56,7 +56,7 @@ public class DashboardRenderer {
             int limit = Math.min(3, queue.size());
             for (int i = 0; i < limit; i++) {
                 queueBuilder.append("`").append(i + 1).append(".` ")
-                        .append(trim(queue.get(i).getInfo().getTitle(), 30)).append("\n");
+                        .append(trim(queue.get(i).getInfo().getTitle())).append("\n");
             }
             if (queue.size() > 3) queueBuilder.append("*...and ").append(queue.size() - 3).append(" more*");
         } else {
@@ -74,7 +74,6 @@ public class DashboardRenderer {
     private List<ActionRow> createButtons(TrackScheduler scheduler) {
         boolean isPaused = scheduler.isPaused();
 
-        // Row 1: Playback Control
         Button playPause = Button.primary("cmd:pause", isPaused ? "Resume" : "Pause")
                 .withEmoji(Emoji.fromUnicode("⏯️"));
         Button skip = Button.secondary("cmd:skip", "Skip")
@@ -85,20 +84,15 @@ public class DashboardRenderer {
                 ? Button.success("cmd:flow", "Flow: ON").withEmoji(Emoji.fromUnicode("🌊"))
                 : Button.secondary("cmd:flow", "Flow: OFF").withEmoji(Emoji.fromUnicode("🌊"));
 
-        // Row 2: Input & Danger Zone
-        // 1. Quick Load (Modal -> Auto Play)
         Button quickLoad = Button.success("cmd:quick_load", "URL / Quick")
                 .withEmoji(Emoji.fromUnicode("⚡"));
 
-        // 2. Deep Search (Select Menu -> Modal -> 5 Buttons)
         Button deepSearch = Button.primary("cmd:deep_search", "Search")
                 .withEmoji(Emoji.fromUnicode("🔎"));
 
-        // 3. Stop (Clear Queue)
         Button stop = Button.secondary("cmd:stop", "Stop")
                 .withEmoji(Emoji.fromUnicode("⏹️"));
 
-        // 4. Begone (Leave Channel)
         Button begone = Button.danger("cmd:begone", "Begone!")
                 .withEmoji(Emoji.fromUnicode("🚪"));
 
@@ -130,7 +124,7 @@ public class DashboardRenderer {
                 TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
     }
 
-    private String trim(String text, int max) {
-        return (text.length() > max) ? text.substring(0, max - 1) + "…" : text;
+    private String trim(String text) {
+        return (text.length() > 30) ? text.substring(0, 30 - 1) + "…" : text;
     }
 }

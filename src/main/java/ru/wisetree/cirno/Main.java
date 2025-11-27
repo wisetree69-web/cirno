@@ -18,17 +18,14 @@ public class Main {
         String token = System.getenv("BOT_TOKEN");
         if (token == null) throw new IllegalArgumentException("Token not found! (Baka!)");
 
-        // 1. Get Bot ID
         String botIdStr = new String(Base64.getDecoder().decode(token.split("\\.")[0]));
         long botId = Long.parseLong(botIdStr);
 
-        // 2. Initialize Managers
         var playerManager = new PlayerManager(botId);
         var voiceService = new JdaVoiceChannelService();
 
         var registry = new CommandRegistry();
 
-        // 3. Registering ALL Cirno's Strongest Commands!
         registry.register(
                 new PlayCommand(playerManager, voiceService),
                 new SkipCommand(playerManager),
@@ -44,7 +41,6 @@ public class Main {
 
         var listener = new BotListener(registry, playerManager, voiceService);
 
-        // 4. Build and Start JDA
         var jda = JDABuilder
                 .createDefault(token)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_VOICE_STATES)

@@ -12,6 +12,7 @@ import ru.wisetree.cirno.ui.DashboardController;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -25,7 +26,6 @@ public class TrackScheduler {
     private Track lastPlayedTrack;
     private Track currentTrack;
 
-    // Ссылка на UI контроллер
     private DashboardController dashboard;
 
     public TrackScheduler(Link link) {
@@ -48,7 +48,6 @@ public class TrackScheduler {
     }
 
     public synchronized void nextTrack() {
-        // 1. Сохраняем историю
         if (currentTrack != null) {
             lastPlayedTrack = currentTrack;
             currentTrack = null;
@@ -63,7 +62,6 @@ public class TrackScheduler {
             log.info("Queue empty, Flow Mode ON.");
             if (dashboard != null) dashboard.addLog("🌊 Flow Mode: Loading recommendations...");
 
-            // Останавливаем текущий, пока ищем новый
             stopPlayer();
             loadRecommendations();
         } else {
@@ -94,7 +92,7 @@ public class TrackScheduler {
 
     private void stopPlayer() {
         link.createOrUpdatePlayer()
-                .setTrack((Track) null)
+                .setTrack(null)
                 .subscribe();
         if (dashboard != null) dashboard.requestUpdate();
     }
@@ -106,17 +104,16 @@ public class TrackScheduler {
         String source = lastPlayedTrack.getInfo().getSourceName();
         String query;
 
-        // Логика Flow
-        if ("deezer".equals(source)) {
-            query = "dzrec:" + identifier;
-        } else if ("spotify".equals(source)) {
-            String artist = lastPlayedTrack.getInfo().getAuthor();
-            String title = lastPlayedTrack.getInfo().getTitle();
-            query = "ytsearch:" + artist + " - " + title;
-        } else if ("youtube".equals(source)) {
-            query = "https://www.youtube.com/watch?v=" + identifier + "&list=RD" + identifier;
-        } else {
-            query = "ytsearch:" + lastPlayedTrack.getInfo().getAuthor() + " - " + lastPlayedTrack.getInfo().getTitle();
+        switch (source) {
+            case "deezer" -> query = "dzrec:" + identifier;
+            case "spotify" -> {
+                String artist = lastPlayedTrack.getInfo().getAuthor();
+                String title = lastPlayedTrack.getInfo().getTitle();
+                query = "ytsearch:" + artist + " - " + title;
+            }
+            case "youtube" -> query = "https://www.youtube.com/watch?v=" + identifier + "&list=RD" + identifier;
+            default ->
+                    query = "ytsearch:" + lastPlayedTrack.getInfo().getAuthor() + " - " + lastPlayedTrack.getInfo().getTitle();
         }
 
         link.loadItem(query).subscribe(result -> {
@@ -132,7 +129,6 @@ public class TrackScheduler {
                 queue.offer(trackLoaded.getTrack());
                 nextTrack();
             } else if (result instanceof SearchResult searchResult) {
-                // Spotify Fallback logic
                 if (!searchResult.getTracks().isEmpty()) {
                     Track youtubeVersion = searchResult.getTracks().getFirst();
                     String ytId = youtubeVersion.getInfo().getIdentifier();
@@ -166,8 +162,7 @@ public class TrackScheduler {
 
     public boolean isPaused() {
         try {
-            // В идеале состояние нужно кешировать, но для примера берем блокирующе
-            return link.getPlayer().block().getPaused();
+            return Objects.requireNonNull(link.getPlayer().block()).getPaused();
         } catch (Exception e) {
             return false;
         }
@@ -221,7 +216,6 @@ public class TrackScheduler {
 
     public long getPosition() {
         if (currentTrack == null) return 0;
-        // Получаем плеер блокирующим образом (для UI это допустимо, так как это быстро)
         return link.getPlayer()
                 .map(dev.arbjerg.lavalink.client.player.LavalinkPlayer::getPosition)
                 .blockOptional()
