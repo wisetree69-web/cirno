@@ -6,9 +6,9 @@ import net.dv8tion.jda.api.entities.channel.unions.AudioChannelUnion;
 import net.dv8tion.jda.api.managers.AudioManager;
 
 public class JdaVoiceChannelService implements VoiceChannelService {
-    public static final String ERR_NULL_MEMBER = "Member cannot be null";
-    public static final String ERR_MEMBER_NOT_IN_VOICE = "You should join a voice channel first";
-    public static final String ERR_COULD_NOT_FIND_CHANNEL = "Could not find voice channel";
+    public static final String ERR_NULL_MEMBER = "Member cannot be null (baka-check failed)";
+    public static final String ERR_MEMBER_NOT_IN_VOICE = "You must be in a voice channel! ⑨";
+    public static final String ERR_COULD_NOT_FIND_CHANNEL = "Could not find voice channel (I'm too strong for this)";
 
     @Override
     public AudioManager joinMemberChannel(Member member) {

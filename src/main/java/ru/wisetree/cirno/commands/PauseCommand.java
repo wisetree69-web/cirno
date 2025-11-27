@@ -14,10 +14,14 @@ public class PauseCommand implements Command {
     }
 
     @Override
-    public String getName() { return "pause"; }
+    public String getName() {
+        return "pause";
+    }
 
     @Override
-    public String getDescription() { return "Поставить на паузу или снять с неё"; }
+    public String getDescription() {
+        return "Freeze or unfreeze the music!";
+    }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -30,11 +34,13 @@ public class PauseCommand implements Command {
             boolean isPaused = player.getPaused();
             player.setPaused(!isPaused).subscribe();
 
-            String status = !isPaused ? "на паузу ⏸️" : "играть ▶️";
-            event.reply("Музыка поставлена " + status).queue();
+            String status = !isPaused ? "FROZEN 🥶" : "UNFROZEN! Time to go! ▶️";
+            event.reply("Music is now " + status).queue();
         });
     }
 
     @Override
-    public List<OptionData> getOptions() { return List.of(); }
+    public List<OptionData> getOptions() {
+        return List.of();
+    }
 }

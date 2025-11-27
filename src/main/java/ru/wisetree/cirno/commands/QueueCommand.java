@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 public class QueueCommand implements Command {
     private final PlayerManager playerManager;
+    // Cirno's favorite color: The Strongest Blue!
+    private static final Color CIRNO_BLUE = new Color(153, 204, 255);
 
     public QueueCommand(PlayerManager playerManager) {
         this.playerManager = playerManager;
@@ -21,7 +23,7 @@ public class QueueCommand implements Command {
     public String getName() { return "queue"; }
 
     @Override
-    public String getDescription() { return "Показать текущую очередь"; }
+    public String getDescription() { return "Show Cirno's Strongest Queue! ⑨"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -35,26 +37,26 @@ public class QueueCommand implements Command {
         Track current = scheduler.getCurrentTrack();
 
         if (current == null && queue.isEmpty()) {
-            event.reply("Очередь пуста.").setEphemeral(true).queue();
+            event.reply("Queue is empty! Like your brain! Baka!").setEphemeral(true).queue();
             return;
         }
 
         EmbedBuilder eb = new EmbedBuilder();
-        eb.setTitle("Музыкальная очередь");
-        eb.setColor(Color.CYAN);
+        eb.setTitle("⑨ Cirno's FREEZE Queue! 🧊");
+        eb.setColor(CIRNO_BLUE);
 
-        // Текущий трек
+        // Current Track
         if (current != null) {
-            eb.addField("Сейчас играет:",
+            eb.addField("Now Playing (The Strongest!):",
                     "[" + current.getInfo().getTitle() + "](" + current.getInfo().getUri() + ")",
                     false);
         }
 
-        // Список (показываем первые 10)
+        // Queue List (Show first 9)
         StringBuilder sb = new StringBuilder();
         int count = 0;
         for (Track track : queue) {
-            if (count >= 10) break;
+            if (count >= 9) break; // Displaying first 9 for The Strongest ⑨
             count++;
             sb.append(count).append(". ")
                     .append(track.getInfo().getTitle())
@@ -63,14 +65,14 @@ public class QueueCommand implements Command {
                     .append("]`\n");
         }
 
-        if (queue.size() > 10) {
-            sb.append("... и еще ").append(queue.size() - 10).append(" треков");
+        if (queue.size() > 9) {
+            sb.append("... and ").append(queue.size() - 9).append(" more weaklings!");
         }
 
         if (sb.length() > 0) {
-            eb.addField("Далее:", sb.toString(), false);
+            eb.addField("Next up (Don't melt!):", sb.toString(), false);
         } else if (current != null) {
-            eb.addField("Далее:", "Пусто (включите /flow для авто-радио)", false);
+            eb.addField("Next up:", "The queue is empty! Call /flow to summon the ice radio!", false);
         }
 
         event.replyEmbeds(eb.build()).queue();

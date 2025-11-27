@@ -19,25 +19,24 @@ public class SkipCommand implements Command {
     public String getName() { return "skip"; }
 
     @Override
-    public String getDescription() { return "Пропустить треки"; }
+    public String getDescription() { return "Skip one or more tracks (You are too fast, Baka!)"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
         var guild = event.getGuild();
         if (guild == null) return;
 
-        // Получаем аргумент (по умолчанию 1)
         int amount = event.getOption("amount", 1, OptionMapping::getAsInt);
         if (amount < 1) amount = 1;
 
         var manager = playerManager.getGuildMusicManager(guild.getIdLong());
         manager.getScheduler().skip(amount);
 
-        event.reply("Пропущено треков: " + amount + " ⏭️").queue();
+        event.reply("Skipped " + amount + " tracks! Baka! ⑨").queue();
     }
 
     @Override
     public List<OptionData> getOptions() {
-        return List.of(new OptionData(OptionType.INTEGER, "amount", "Сколько треков пропустить").setRequired(false));
+        return List.of(new OptionData(OptionType.INTEGER, "amount", "How many tracks to skip").setRequired(false));
     }
 }

@@ -20,7 +20,7 @@ public class BegoneCommand implements Command {
 
     @Override
     public String getDescription() {
-        return "Остановить музыку, очистить очередь и выйти";
+        return "I'm leaving! You are too weak for me!";
     }
 
     @Override
@@ -28,22 +28,17 @@ public class BegoneCommand implements Command {
         var guild = event.getGuild();
         if (guild == null) return;
 
-        // 1. Чистим очередь (чтобы ничего не заиграло потом)
         var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
         musicManager.getScheduler().clearQueue();
 
-        // 2. Останавливаем плеер (ставим трек в null)
-        // Это гарантированно работает, так как метод setTrack мы уже использовали
-        var link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
-        link.createOrUpdatePlayer()
+        playerManager.getClient().getOrCreateLink(guild.getIdLong())
+                .createOrUpdatePlayer()
                 .setTrack(null)
                 .subscribe();
 
-        // 3. Отключаемся от голосового канала в Discord
-        // Это самое главное действие для "выхода"
         guild.getAudioManager().closeAudioConnection();
 
-        event.reply("Ну всё, я пошел. Бывай! 👋").queue();
+        event.reply("I'm leaving! You're too weak to handle the Strongest! ⑨").queue();
     }
 
     @Override

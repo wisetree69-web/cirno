@@ -16,9 +16,10 @@ public class PlayerManager {
     public PlayerManager(long botId) {
         this.client = new LavalinkClient(botId);
 
+        // Cirno Node: The Strongest!
         client.addNode(
                 new NodeOptions.Builder()
-                        .setName("local-node")
+                        .setName("ice-fairy-node-⑨")
                         .setServerUri(URI.create("ws://localhost:2333"))
                         .setPassword("youshallnotpass")
                         .build()
@@ -29,10 +30,10 @@ public class PlayerManager {
             var guildId = event.getGuildId();
             var musicManager = getGuildMusicManager(guildId);
 
-            // 1. Сохраняем трек как "последний сыгранный"
+            // 1. Save the track that just finished as "last played"
             musicManager.getScheduler().setLastPlayedTrack(event.getTrack());
 
-            // 2. Если трек кончился нормально -> включаем следующий
+            // 2. Check if we should start the next one
             boolean shouldStartNext = reason == AudioTrackEndReason.FINISHED ||
                     reason == AudioTrackEndReason.LOAD_FAILED;
 
@@ -42,7 +43,6 @@ public class PlayerManager {
         });
     }
 
-    // Остальной код без изменений...
     public GuildMusicManager getGuildMusicManager(long guildId) {
         return musicManagers.computeIfAbsent(guildId, id -> {
             var link = client.getOrCreateLink(id);

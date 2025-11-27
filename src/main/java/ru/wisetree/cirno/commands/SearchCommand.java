@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 public class SearchCommand implements Command {
     private final PlayerManager playerManager;
     private final VoiceChannelService voiceService;
+    private static final Color CIRNO_BLUE = new Color(153, 204, 255);
 
     public SearchCommand(PlayerManager playerManager, VoiceChannelService voiceService) {
         this.playerManager = playerManager;
@@ -31,7 +32,7 @@ public class SearchCommand implements Command {
     public String getName() { return "search"; }
 
     @Override
-    public String getDescription() { return "Найти трек (выбор кнопками)"; }
+    public String getDescription() { return "⑨ Search for a track and pick with buttons! The strongest way!"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -46,62 +47,58 @@ public class SearchCommand implements Command {
             voiceService.joinMemberChannel(member);
             Link link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
 
-            // Ищем на YouTube (по умолчанию)
             link.loadItem("ytsearch:" + query).subscribe(loadResult -> {
                 if (loadResult instanceof SearchResult searchResult) {
                     List<Track> tracks = searchResult.getTracks();
 
                     if (tracks.isEmpty()) {
-                        event.getHook().sendMessage("Ничего не найдено.").queue();
+                        event.getHook().sendMessage("Baka! Found nothing for: **" + query + "**").queue();
                         return;
                     }
 
-                    // 1. Строим Embed (Текстовый список)
+                    // 1. Build Embed
                     EmbedBuilder eb = new EmbedBuilder();
-                    eb.setTitle("Результаты поиска: " + query);
-                    eb.setColor(Color.ORANGE);
+                    eb.setTitle("⑨ Search Results: " + query);
+                    eb.setColor(CIRNO_BLUE);
 
                     StringBuilder description = new StringBuilder();
-                    List<Button> trackButtons = new ArrayList<>(); // Кнопки для треков (макс 5)
+                    List<Button> trackButtons = new ArrayList<>();
 
                     int limit = Math.min(tracks.size(), 5);
                     for (int i = 0; i < limit; i++) {
                         Track track = tracks.get(i);
-                        // Получаем Title и URI
                         String title = track.getInfo().getTitle();
                         String uri = track.getInfo().getUri();
 
-                        // Форматируем строку: "1. Title (Author) [03:20]"
                         description.append("**").append(i + 1).append(".** ")
                                 .append("[").append(title).append("](").append(uri).append(") ")
                                 .append("*by ").append(track.getInfo().getAuthor()).append("* ")
                                 .append("`[").append(formatTime(track.getInfo().getLength())).append("]`")
                                 .append("\n");
 
-                        // Создаем кнопку. ID = "search:<URL>" (макс 100 символов)
-                        trackButtons.add(Button.primary("search:" + uri, String.valueOf(i + 1)));
+                        trackButtons.add(net.dv8tion.jda.api.components.buttons.Button.primary("search:" + uri, String.valueOf(i + 1)));
                     }
 
-                    // 2. Добавляем кнопку отмены в ОТДЕЛЬНУЮ строку
+                    // 2. Control Button
                     List<Button> controlButtons = List.of(
-                            Button.danger("search:cancel", "Отмена")
+                            net.dv8tion.jda.api.components.buttons.Button.danger("search:cancel", "Cancel ❌")
                     );
 
                     eb.setDescription(description.toString());
 
-                    // 3. Отправляем сообщение с ДВУМЯ ActionRow
+                    // 3. Send with TWO ActionRows
                     event.getHook().sendMessageEmbeds(eb.build())
                             .setComponents(
-                                    ActionRow.of(trackButtons),   // 1-я строка: 5 кнопок выбора
-                                    ActionRow.of(controlButtons)  // 2-я строка: 1 кнопка отмены
+                                    ActionRow.of(trackButtons),
+                                    ActionRow.of(controlButtons)
                             )
                             .queue();
                 } else {
-                    event.getHook().sendMessage("Поиск не дал результатов.").queue();
+                    event.getHook().sendMessage("W-What? Search failed!").queue();
                 }
             });
         } catch (Exception e) {
-            event.getHook().sendMessage("Ошибка: " + e.getMessage()).queue();
+            event.getHook().sendMessage("Baka! An error occurred: " + e.getMessage()).queue();
         }
     }
 
@@ -115,6 +112,6 @@ public class SearchCommand implements Command {
 
     @Override
     public List<OptionData> getOptions() {
-        return List.of(new OptionData(OptionType.STRING, "query", "Что искать").setRequired(true));
+        return List.of(new OptionData(OptionType.STRING, "query", "What to search for!").setRequired(true));
     }
 }

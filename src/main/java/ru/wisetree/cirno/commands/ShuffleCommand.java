@@ -17,7 +17,7 @@ public class ShuffleCommand implements Command {
     public String getName() { return "shuffle"; }
 
     @Override
-    public String getDescription() { return "Перемешать очередь"; }
+    public String getDescription() { return "Mix the queue! Who knows what comes next? 🥶"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -27,7 +27,7 @@ public class ShuffleCommand implements Command {
         var manager = playerManager.getGuildMusicManager(guild.getIdLong());
         manager.getScheduler().shuffle();
 
-        event.reply("Очередь перемешана 🔀").queue();
+        event.reply("Queue is completely mixed! You Baka! 🔀").queue();
     }
 
     @Override

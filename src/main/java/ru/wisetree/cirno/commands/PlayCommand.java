@@ -28,13 +28,12 @@ public class PlayCommand implements Command {
 
     @Override
     public String getDescription() {
-        return "Играть музыку";
+        return "9️⃣ Add a track to the queue! You can't stop the strongest!";
     }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
         String query = event.getOption("url", OptionMapping::getAsString);
-        // Получаем выбор пользователя или берем YouTube по умолчанию
         String sourcePrefix = event.getOption("source", "ytsearch:", OptionMapping::getAsString);
 
         var guild = event.getGuild();
@@ -55,24 +54,24 @@ public class PlayCommand implements Command {
             loadAndPlay(musicManager, link, event, search);
 
         } catch (Exception e) {
-            event.getHook().sendMessage("Ошибка: " + e.getMessage()).queue();
+            event.getHook().sendMessage("Baka! Connection failed: " + e.getMessage()).queue();
         }
     }
 
     private String buildSearchQuery(String query, String sourcePrefix) {
-        // 1. Если это ссылка -> игнорируем выбор источника, Lavalink сам разберется
+        // 1. Direct link
         if (query.startsWith("http://") || query.startsWith("https://")) {
             return query;
         }
 
-        // 2. Если пользователь сам написал префикс (power user) -> оставляем как есть
+        // 2. Power user: already typed a search prefix
         if (query.startsWith("scsearch:") || query.startsWith("dzsearch:") ||
                 query.startsWith("ytsearch:") || query.startsWith("ytmsearch:") ||
                 query.startsWith("spsearch:"))  {
             return query;
         }
 
-        // 3. Иначе склеиваем префикс из меню и запрос
+        // 3. Text search (uses the selected source)
         return sourcePrefix + query;
     }
 
@@ -81,50 +80,45 @@ public class PlayCommand implements Command {
             switch (loadResult) {
                 case TrackLoaded trackLoaded -> {
                     musicManager.getScheduler().enqueue(trackLoaded.getTrack());
-                    event.getHook().sendMessage("Добавлено: " + trackLoaded.getTrack().getInfo().getTitle()).queue();
+                    event.getHook().sendMessage("🧊 Added to the FREEZE queue: **" + trackLoaded.getTrack().getInfo().getTitle() + "**").queue();
                 }
                 case PlaylistLoaded playlistLoaded -> {
                     List<Track> tracks = playlistLoaded.getTracks();
 
                     if (tracks.isEmpty()) {
-                        event.getHook().sendMessage("Плейлист пуст!").queue();
+                        event.getHook().sendMessage("Baka! Playlist is empty! 🥶").queue();
                         return;
                     }
 
-                    // 1. Добавляем все треки в очередь планировщика
-                    // Важно: TrackScheduler.enqueue сам разберется, играть или ждать
                     for (Track track : tracks) {
                         musicManager.getScheduler().enqueue(track);
                     }
 
-                    event.getHook().sendMessage("Добавлен плейлист: " + playlistLoaded.getInfo().getName() +
-                            " (" + tracks.size() + " треков)").queue();
+                    event.getHook().sendMessage("🧊 Freezing playlist: **" + playlistLoaded.getInfo().getName() + "** (" + tracks.size() + " tracks)").queue();
                 }
                 case SearchResult searchResult -> {
                     var track = searchResult.getTracks().getFirst();
                     musicManager.getScheduler().enqueue(track);
-                    event.getHook().sendMessage("Найдено: " + track.getInfo().getTitle()).queue();
+                    event.getHook().sendMessage("⑨ Found and added: **" + track.getInfo().getTitle() + "**").queue();
                 }
                 case NoMatches noMatches -> {
-                    event.getHook().sendMessage("Ничего не найдено").queue();
+                    event.getHook().sendMessage("W-What?! Found nothing!").queue();
                 }
                 case LoadFailed loadFailed -> {
-                    event.getHook().sendMessage("Ошибка загрузки: " + loadFailed.getException().getMessage()).queue();
+                    event.getHook().sendMessage("Error! My ice powers failed: " + loadFailed.getException().getMessage()).queue();
                 }
-                default -> throw new IllegalStateException("Unexpected value: " + loadResult);
+                default -> event.getHook().sendMessage("I got a weird result, Baka!").queue();
             }
         });
     }
 
     @Override
     public List<OptionData> getOptions() {
-        // Опция запроса
-        var urlOption = new OptionData(OptionType.STRING, "url", "Ссылка или название трека")
+        var urlOption = new OptionData(OptionType.STRING, "url", "The link or search query to be frozen")
                 .setRequired(true);
 
-        // Опция источника (выпадающий список)
-        var sourceOption = new OptionData(OptionType.STRING, "source", "Где искать (по умолчанию YouTube)")
-                .setRequired(false) // Необязательно
+        var sourceOption = new OptionData(OptionType.STRING, "source", "Where to search (Default: YouTube)")
+                .setRequired(false)
                 .addChoice("YouTube", "ytsearch:")
                 .addChoice("YouTube Music", "ytmsearch:")
                 .addChoice("SoundCloud", "scsearch:")

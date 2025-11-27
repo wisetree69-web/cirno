@@ -22,9 +22,11 @@ public class BotListener extends ListenerAdapter {
         String commandName = event.getName();
         var command = commandRegistry.getCommand(commandName);
         if (command == null) {
-            event.reply("Command not found").setEphemeral(true).queue();
+            event.reply("W-What?! Command not found! ⑨").setEphemeral(true).queue();
+            log.warn("Command not found: {}", commandName);
             return;
         }
+        log.info("Executing command: {} from user: {}", commandName, event.getUser().getName());
         command.execute(event);
     }
 
@@ -35,34 +37,31 @@ public class BotListener extends ListenerAdapter {
 
         // Проверяем, что это кнопка поиска
         if (buttonId.startsWith("search:")) {
-            String trackUrl = buttonId.substring(7); // Отрезаем "search:"
+            String trackUrl = buttonId.substring(7);
 
             // Обработка кнопки "Отмена"
             if (trackUrl.equals("cancel")) {
-                event.getMessage().delete().queue(); // Удаляем сообщение с кнопками
+                event.getMessage().delete().queue();
                 return;
             }
 
             var guild = event.getGuild();
             if (guild == null) return;
 
-            // Отвечаем пользователю (чтобы кнопка перестала крутиться)
             event.deferReply().queue();
 
             var link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
             var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
 
-            // Грузим трек по ссылке, которая была зашита в кнопке
             link.loadItem(trackUrl).subscribe(loadResult -> {
                 if (loadResult instanceof TrackLoaded trackLoaded) {
                     musicManager.getScheduler().enqueue(trackLoaded.getTrack());
 
-                    event.getHook().sendMessage("✅ Выбрано: " + trackLoaded.getTrack().getInfo().getTitle()).queue();
+                    event.getHook().sendMessage("🧊 Track selected! Added to the FREEZE queue!").queue();
 
-                    // Удаляем сообщение с кнопками, чтобы нельзя было нажать второй раз
                     event.getMessage().delete().queue();
                 } else {
-                    event.getHook().sendMessage("Ошибка загрузки трека.").setEphemeral(true).queue();
+                    event.getHook().sendMessage("B-Baka! Could not load that track.").setEphemeral(true).queue();
                 }
             });
         }

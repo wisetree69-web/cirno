@@ -20,7 +20,7 @@ public class FlowCommand implements Command {
 
     @Override
     public String getDescription() {
-        return "Переключить режим авто-воспроизведения (Flow)";
+        return "Toggle Flow Mode (The Strongest Ice Radio ⑨)";
     }
 
     @Override
@@ -30,15 +30,11 @@ public class FlowCommand implements Command {
 
         var scheduler = playerManager.getGuildMusicManager(guild.getIdLong()).getScheduler();
 
-        // Переключаем состояние
         boolean newState = !scheduler.isFlowMode();
         scheduler.setFlowMode(newState);
 
-        String status = newState ? "ВКЛЮЧЕН ✅" : "ВЫКЛЮЧЕН ❌";
-        event.reply("Режим Flow " + status).queue();
-
-        // Если включили Flow и ничего не играет, но есть история -> можно попробовать запустить сразу
-        // Но для простоты оставим логику "заработает после следующего трека"
+        String status = newState ? "ON ✅" : "OFF ❌";
+        event.reply("Flow Mode is **" + status + "**! The Ice Radio is ready! 🧊").queue();
     }
 
     @Override

@@ -53,13 +53,10 @@ public class TrackScheduler {
             startTrack(nextTrack);
         } else if (flowMode && lastPlayedTrack != null) {
             log.info("Queue empty, Flow Mode ON. Stopping current and loading recommendations...");
-
-            // --- ИСПРАВЛЕНИЕ ТУТ ---
             // Сначала останавливаем текущий трек, чтобы пользователь понял, что скип сработал
             link.createOrUpdatePlayer()
                     .setTrack((Track) null)
                     .subscribe();
-
             // А теперь грузим новые
             loadRecommendations();
         } else {
@@ -91,10 +88,11 @@ public class TrackScheduler {
         String source = lastPlayedTrack.getInfo().getSourceName();
         String query;
 
+        // Логика Flow
         if ("deezer".equals(source)) {
             query = "dzrec:" + identifier;
         } else if ("spotify".equals(source)) {
-            // Ищем YouTube версию трека
+            // Fallback на YouTube, чтобы не возиться с капризным sprec
             String artist = lastPlayedTrack.getInfo().getAuthor();
             String title = lastPlayedTrack.getInfo().getTitle();
             query = "ytsearch:" + artist + " - " + title;
@@ -104,13 +102,11 @@ public class TrackScheduler {
             query = "ytsearch:" + lastPlayedTrack.getInfo().getAuthor() + " - " + lastPlayedTrack.getInfo().getTitle();
         }
 
-        log.info("Flow Mode: Loading recommendations for [{}]", lastPlayedTrack.getInfo().getTitle());
+        log.info("Flow Mode: Loading recommendations for [{}] using query [{}]", lastPlayedTrack.getInfo().getTitle(), query);
 
         link.loadItem(query).subscribe(result -> {
             if (result instanceof PlaylistLoaded playlist) {
-                // Логика для YouTube Mix и Deezer Recs
                 for (Track track : playlist.getTracks()) {
-                    // Защита от повтора: если ID совпадает с тем, что только что играло - пропускаем
                     if (!track.getInfo().getIdentifier().equals(identifier)) {
                         queue.offer(track);
                     }
@@ -120,23 +116,18 @@ public class TrackScheduler {
                 queue.offer(trackLoaded.getTrack());
                 nextTrack();
             } else if (result instanceof SearchResult searchResult) {
-                // --- ИСПРАВЛЕНИЕ ДЛЯ SPOTIFY FALLBACK ---
+                // Spotify Fallback: Нашли YouTube-версию -> генерируем Mix
                 if (!searchResult.getTracks().isEmpty()) {
-                    // 1. Мы нашли YouTube-версию трека, который только что играл
                     Track youtubeVersion = searchResult.getTracks().getFirst();
                     String ytId = youtubeVersion.getInfo().getIdentifier();
 
-                    // 2. Мы НЕ добавляем его в очередь (чтобы не слушать повторно).
-                    // Вместо этого мы генерируем Микс на его основе.
                     String mixUrl = "https://www.youtube.com/watch?v=" + ytId + "&list=RD" + ytId;
 
                     log.info("Flow Mode: Found YouTube version, loading Mix: {}", mixUrl);
 
-                    // 3. Делаем второй запрос (вложенный)
                     link.loadItem(mixUrl).subscribe(mixResult -> {
                         if (mixResult instanceof PlaylistLoaded mixPlaylist) {
                             for (Track track : mixPlaylist.getTracks()) {
-                                // Исключаем сам трек-сид из микса
                                 if (!track.getInfo().getIdentifier().equals(ytId)) {
                                     queue.offer(track);
                                 }
@@ -156,11 +147,10 @@ public class TrackScheduler {
     }
 
     public void shuffle() {
-        // BlockingQueue неудобна для шаффла, перегоняем в List и обратно
         List<Track> list = new ArrayList<>();
-        queue.drainTo(list); // Перемещает всё из очереди в лист
+        queue.drainTo(list);
         Collections.shuffle(list);
-        queue.addAll(list); // Кладем обратно
+        queue.addAll(list);
     }
 
     public void skip(int amount) {
@@ -168,11 +158,9 @@ public class TrackScheduler {
             nextTrack();
             return;
         }
-        // Удаляем amount-1 треков из начала очереди
         for (int i = 0; i < amount - 1; i++) {
             queue.poll();
         }
-        // И запускаем следующий (который был amount-ным)
         nextTrack();
     }
 

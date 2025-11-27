@@ -17,7 +17,7 @@ public class StopCommand implements Command {
     public String getName() { return "stop"; }
 
     @Override
-    public String getDescription() { return "Остановить музыку и очистить очередь"; }
+    public String getDescription() { return "Stop playback and clear the whole queue!"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -25,15 +25,14 @@ public class StopCommand implements Command {
         if (guild == null) return;
 
         var manager = playerManager.getGuildMusicManager(guild.getIdLong());
-        manager.getScheduler().clearQueue(); // Чистим очередь
+        manager.getScheduler().clearQueue();
 
-        // Останавливаем плеер
         playerManager.getClient().getOrCreateLink(guild.getIdLong())
                 .createOrUpdatePlayer()
                 .setTrack(null)
                 .subscribe();
 
-        event.reply("Музыка остановлена, очередь очищена ⏹️").queue();
+        event.reply("I'm done! The queue is annihilated! ❄️").queue();
     }
 
     @Override
