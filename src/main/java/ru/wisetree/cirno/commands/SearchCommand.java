@@ -4,9 +4,9 @@ import dev.arbjerg.lavalink.client.Link;
 import dev.arbjerg.lavalink.client.player.SearchResult;
 import dev.arbjerg.lavalink.client.player.Track;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.components.actionrow.ActionRow;
-import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
@@ -32,7 +32,7 @@ public class SearchCommand implements Command {
     public String getName() { return "search"; }
 
     @Override
-    public String getDescription() { return "⑨ Search for a track and pick with buttons! The strongest way!"; }
+    public String getDescription() { return "Search for a track and pick with buttons! ⑨"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -47,8 +47,12 @@ public class SearchCommand implements Command {
             voiceService.joinMemberChannel(member);
             Link link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
 
-            link.loadItem("ytsearch:" + query).subscribe(loadResult -> {
-                if (loadResult instanceof SearchResult searchResult) {
+            String sourcePrefix = event.getOption("source", "ytsearch:", OptionMapping::getAsString);
+            String search = buildSearchQuery(query, sourcePrefix);
+
+            link.loadItem(search).subscribe(loadResult -> {
+                if (loadResult instanceof SearchResult) {
+                    SearchResult searchResult = (SearchResult) loadResult;
                     List<Track> tracks = searchResult.getTracks();
 
                     if (tracks.isEmpty()) {
@@ -56,10 +60,10 @@ public class SearchCommand implements Command {
                         return;
                     }
 
-                    // 1. Build Embed
                     EmbedBuilder eb = new EmbedBuilder();
                     eb.setTitle("⑨ Search Results: " + query);
                     eb.setColor(CIRNO_BLUE);
+                    eb.setFooter("Select a track or click Cancel");
 
                     StringBuilder description = new StringBuilder();
                     List<Button> trackButtons = new ArrayList<>();
@@ -70,23 +74,22 @@ public class SearchCommand implements Command {
                         String title = track.getInfo().getTitle();
                         String uri = track.getInfo().getUri();
 
+                        if (uri.length() > 80) continue;
+
                         description.append("**").append(i + 1).append(".** ")
                                 .append("[").append(title).append("](").append(uri).append(") ")
-                                .append("*by ").append(track.getInfo().getAuthor()).append("* ")
                                 .append("`[").append(formatTime(track.getInfo().getLength())).append("]`")
                                 .append("\n");
 
-                        trackButtons.add(net.dv8tion.jda.api.components.buttons.Button.primary("search:" + uri, String.valueOf(i + 1)));
+                        trackButtons.add(Button.primary("search:" + uri, String.valueOf(i + 1)));
                     }
 
-                    // 2. Control Button
                     List<Button> controlButtons = List.of(
-                            net.dv8tion.jda.api.components.buttons.Button.danger("search:cancel", "Cancel ❌")
+                            Button.danger("search:cancel", "Cancel ❌")
                     );
 
                     eb.setDescription(description.toString());
 
-                    // 3. Send with TWO ActionRows
                     event.getHook().sendMessageEmbeds(eb.build())
                             .setComponents(
                                     ActionRow.of(trackButtons),
@@ -94,12 +97,22 @@ public class SearchCommand implements Command {
                             )
                             .queue();
                 } else {
-                    event.getHook().sendMessage("W-What? Search failed!").queue();
+                    event.getHook().sendMessage("W-What? This isn't a search result! (Try providing a direct link in /play)").queue();
                 }
             });
         } catch (Exception e) {
             event.getHook().sendMessage("Baka! An error occurred: " + e.getMessage()).queue();
         }
+    }
+
+    private String buildSearchQuery(String query, String sourcePrefix) {
+        if (query.startsWith("http://") || query.startsWith("https://")) return query;
+        if (query.startsWith("ytsearch:") || query.startsWith("ytmsearch:") ||
+                query.startsWith("scsearch:") || query.startsWith("spsearch:") ||
+                query.startsWith("dzsearch:")) {
+            return query;
+        }
+        return sourcePrefix + query;
     }
 
     private String formatTime(long millis) {
@@ -112,6 +125,15 @@ public class SearchCommand implements Command {
 
     @Override
     public List<OptionData> getOptions() {
-        return List.of(new OptionData(OptionType.STRING, "query", "What to search for!").setRequired(true));
+        return List.of(
+                new OptionData(OptionType.STRING, "query", "What to search for!").setRequired(true),
+                // ВОТ ОНИ, ВСЕ ИСТОЧНИКИ:
+                new OptionData(OptionType.STRING, "source", "Source (Default: YouTube)").setRequired(false)
+                        .addChoice("YouTube", "ytsearch:")
+                        .addChoice("YouTube Music", "ytmsearch:")
+                        .addChoice("SoundCloud", "scsearch:")
+                        .addChoice("Spotify", "spsearch:")
+                        .addChoice("Deezer", "dzsearch:")
+        );
     }
 }

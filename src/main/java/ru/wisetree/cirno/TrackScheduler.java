@@ -7,6 +7,7 @@ import dev.arbjerg.lavalink.client.player.Track;
 import dev.arbjerg.lavalink.client.player.TrackLoaded;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ru.wisetree.cirno.ui.DashboardController;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,22 +25,29 @@ public class TrackScheduler {
     private Track lastPlayedTrack;
     private Track currentTrack;
 
+    // Ссылка на UI контроллер
+    private DashboardController dashboard;
+
     public TrackScheduler(Link link) {
         this.link = link;
         this.queue = new LinkedBlockingQueue<>();
     }
 
-    public void enqueue(Track track) {
-        // Если мы ничего не играем сейчас -> играем этот трек
+    public void setDashboard(DashboardController dashboard) {
+        this.dashboard = dashboard;
+    }
+
+    public synchronized void enqueue(Track track) {
         if (currentTrack == null) {
             startTrack(track);
+            if (dashboard != null) dashboard.addSuccess("Starting: " + track.getInfo().getTitle());
         } else {
-            // Иначе -> в очередь
             queue.offer(track);
+            if (dashboard != null) dashboard.addSuccess("Queued: " + track.getInfo().getTitle());
         }
     }
 
-    public void nextTrack() {
+    public synchronized void nextTrack() {
         // 1. Сохраняем историю
         if (currentTrack != null) {
             lastPlayedTrack = currentTrack;
@@ -52,25 +60,25 @@ public class TrackScheduler {
             log.info("Next track from queue: {}", nextTrack.getInfo().getTitle());
             startTrack(nextTrack);
         } else if (flowMode && lastPlayedTrack != null) {
-            log.info("Queue empty, Flow Mode ON. Stopping current and loading recommendations...");
-            // Сначала останавливаем текущий трек, чтобы пользователь понял, что скип сработал
-            link.createOrUpdatePlayer()
-                    .setTrack((Track) null)
-                    .subscribe();
-            // А теперь грузим новые
+            log.info("Queue empty, Flow Mode ON.");
+            if (dashboard != null) dashboard.addLog("🌊 Flow Mode: Loading recommendations...");
+
+            // Останавливаем текущий, пока ищем новый
+            stopPlayer();
             loadRecommendations();
         } else {
-            log.info("Queue empty, Flow Mode OFF. Stopping player.");
-            link.createOrUpdatePlayer()
-                    .setTrack((Track) null)
-                    .subscribe();
+            log.info("Queue empty. Stopping.");
+            if (dashboard != null) dashboard.addLog("💤 Queue finished. Waiting...");
+            stopPlayer();
         }
     }
 
-    public void clearQueue() {
+    public synchronized void clearQueue() {
         queue.clear();
         lastPlayedTrack = null;
         currentTrack = null;
+        stopPlayer();
+        if (dashboard != null) dashboard.addSuccess("Queue cleared! Silence falls... ❄️");
     }
 
     private void startTrack(Track track) {
@@ -79,6 +87,16 @@ public class TrackScheduler {
                 .setTrack(track)
                 .setVolume(50)
                 .subscribe();
+
+        // Форсируем обновление дешборда
+        if (dashboard != null) dashboard.requestUpdate();
+    }
+
+    private void stopPlayer() {
+        link.createOrUpdatePlayer()
+                .setTrack((Track) null)
+                .subscribe();
+        if (dashboard != null) dashboard.requestUpdate();
     }
 
     private void loadRecommendations() {
@@ -92,7 +110,6 @@ public class TrackScheduler {
         if ("deezer".equals(source)) {
             query = "dzrec:" + identifier;
         } else if ("spotify".equals(source)) {
-            // Fallback на YouTube, чтобы не возиться с капризным sprec
             String artist = lastPlayedTrack.getInfo().getAuthor();
             String title = lastPlayedTrack.getInfo().getTitle();
             query = "ytsearch:" + artist + " - " + title;
@@ -102,8 +119,6 @@ public class TrackScheduler {
             query = "ytsearch:" + lastPlayedTrack.getInfo().getAuthor() + " - " + lastPlayedTrack.getInfo().getTitle();
         }
 
-        log.info("Flow Mode: Loading recommendations for [{}] using query [{}]", lastPlayedTrack.getInfo().getTitle(), query);
-
         link.loadItem(query).subscribe(result -> {
             if (result instanceof PlaylistLoaded playlist) {
                 for (Track track : playlist.getTracks()) {
@@ -111,19 +126,17 @@ public class TrackScheduler {
                         queue.offer(track);
                     }
                 }
+                if (dashboard != null) dashboard.addSuccess("Flow: Found " + playlist.getTracks().size() + " tracks!");
                 nextTrack();
             } else if (result instanceof TrackLoaded trackLoaded) {
                 queue.offer(trackLoaded.getTrack());
                 nextTrack();
             } else if (result instanceof SearchResult searchResult) {
-                // Spotify Fallback: Нашли YouTube-версию -> генерируем Mix
+                // Spotify Fallback logic
                 if (!searchResult.getTracks().isEmpty()) {
                     Track youtubeVersion = searchResult.getTracks().getFirst();
                     String ytId = youtubeVersion.getInfo().getIdentifier();
-
                     String mixUrl = "https://www.youtube.com/watch?v=" + ytId + "&list=RD" + ytId;
-
-                    log.info("Flow Mode: Found YouTube version, loading Mix: {}", mixUrl);
 
                     link.loadItem(mixUrl).subscribe(mixResult -> {
                         if (mixResult instanceof PlaylistLoaded mixPlaylist) {
@@ -132,6 +145,7 @@ public class TrackScheduler {
                                     queue.offer(track);
                                 }
                             }
+                            if (dashboard != null) dashboard.addSuccess("Flow: Mix loaded via YouTube!");
                             nextTrack();
                         }
                     });
@@ -142,26 +156,42 @@ public class TrackScheduler {
 
     public void pause(boolean state) {
         link.getPlayer().subscribe(player ->
-                player.setPaused(state).subscribe()
+                player.setPaused(state).subscribe(r -> {
+                    if (dashboard != null) {
+                        dashboard.addLog(state ? "🥶 Playback Frozen" : "▶ Playback Thawed");
+                    }
+                })
         );
     }
 
-    public void shuffle() {
+    public boolean isPaused() {
+        try {
+            // В идеале состояние нужно кешировать, но для примера берем блокирующе
+            return link.getPlayer().block().getPaused();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public synchronized void shuffle() {
         List<Track> list = new ArrayList<>();
         queue.drainTo(list);
         Collections.shuffle(list);
         queue.addAll(list);
+        if (dashboard != null) dashboard.addSuccess("Shuffled " + list.size() + " tracks! 🔀");
     }
 
-    public void skip(int amount) {
+    public synchronized void skip(int amount) {
         if (amount <= 1) {
             nextTrack();
+            if (dashboard != null) dashboard.addLog("Skipped 1 track.");
             return;
         }
         for (int i = 0; i < amount - 1; i++) {
             queue.poll();
         }
         nextTrack();
+        if (dashboard != null) dashboard.addSuccess("Skipped " + amount + " tracks.");
     }
 
     public List<Track> getQueueList() {
@@ -174,6 +204,7 @@ public class TrackScheduler {
 
     public void setFlowMode(boolean flowMode) {
         this.flowMode = flowMode;
+        if (dashboard != null) dashboard.addLog("Flow Mode: " + (flowMode ? "ON ✅" : "OFF ❌"));
     }
 
     public boolean isFlowMode() {
@@ -186,5 +217,14 @@ public class TrackScheduler {
 
     public BlockingQueue<Track> getQueue() {
         return queue;
+    }
+
+    public long getPosition() {
+        if (currentTrack == null) return 0;
+        // Получаем плеер блокирующим образом (для UI это допустимо, так как это быстро)
+        return link.getPlayer()
+                .map(dev.arbjerg.lavalink.client.player.LavalinkPlayer::getPosition)
+                .blockOptional()
+                .orElse(0L);
     }
 }

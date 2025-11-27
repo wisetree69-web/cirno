@@ -22,26 +22,21 @@ public class PlayCommand implements Command {
     }
 
     @Override
-    public String getName() {
-        return "play";
-    }
+    public String getName() { return "play"; }
 
     @Override
-    public String getDescription() {
-        return "9️⃣ Add a track to the queue! You can't stop the strongest!";
-    }
+    public String getDescription() { return "Add a track to the queue (Does not spawn dashboard)"; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
-        String query = event.getOption("url", OptionMapping::getAsString);
-        String sourcePrefix = event.getOption("source", "ytsearch:", OptionMapping::getAsString);
-
-        var guild = event.getGuild();
+        var guild = event .getGuild();
         var member = event.getMember();
+        if (guild == null || member == null) return;
 
-        if (guild == null || member == null || query == null) return;
+        String query = event.getOption("url", OptionMapping::getAsString);
+        if (query == null) return;
 
-        event.deferReply().queue();
+        event.deferReply().setEphemeral(true).queue();
 
         try {
             voiceService.joinMemberChannel(member);
@@ -49,82 +44,76 @@ public class PlayCommand implements Command {
             GuildMusicManager musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
             Link link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
 
+            String sourcePrefix = event.getOption("source", "ytsearch:", OptionMapping::getAsString);
             String search = buildSearchQuery(query, sourcePrefix);
 
-            loadAndPlay(musicManager, link, event, search);
+            musicManager.getDashboard().addLog("🔎 /play request: " + query);
+
+            link.loadItem(search).subscribe(result -> {
+                handleResult(musicManager, result, event);
+            });
 
         } catch (Exception e) {
-            event.getHook().sendMessage("Baka! Connection failed: " + e.getMessage()).queue();
+            event.getHook().sendMessage("Baka! " + e.getMessage()).queue();
         }
     }
 
     private String buildSearchQuery(String query, String sourcePrefix) {
-        // 1. Direct link
-        if (query.startsWith("http://") || query.startsWith("https://")) {
+        // 1. Если это ссылка - источник не важен
+        if (query.startsWith("http://") || query.startsWith("https://")) return query;
+
+        // 2. Если пользователь сам написал префикс - не дублируем
+        if (query.startsWith("ytsearch:") || query.startsWith("ytmsearch:") ||
+                query.startsWith("scsearch:") || query.startsWith("spsearch:") ||
+                query.startsWith("dzsearch:")) {
             return query;
         }
 
-        // 2. Power user: already typed a search prefix
-        if (query.startsWith("scsearch:") || query.startsWith("dzsearch:") ||
-                query.startsWith("ytsearch:") || query.startsWith("ytmsearch:") ||
-                query.startsWith("spsearch:"))  {
-            return query;
-        }
-
-        // 3. Text search (uses the selected source)
+        // 3. Иначе добавляем выбранный источник
         return sourcePrefix + query;
     }
 
-    private void loadAndPlay(GuildMusicManager musicManager, Link link, SlashCommandInteractionEvent event, String identifier) {
-        link.loadItem(identifier).subscribe(loadResult -> {
-            switch (loadResult) {
-                case TrackLoaded trackLoaded -> {
-                    musicManager.getScheduler().enqueue(trackLoaded.getTrack());
-                    event.getHook().sendMessage("🧊 Added to the FREEZE queue: **" + trackLoaded.getTrack().getInfo().getTitle() + "**").queue();
-                }
-                case PlaylistLoaded playlistLoaded -> {
-                    List<Track> tracks = playlistLoaded.getTracks();
+    private void handleResult(GuildMusicManager musicManager, Object result, SlashCommandInteractionEvent event) {
+        if (result instanceof TrackLoaded) {
+            TrackLoaded tr = (TrackLoaded) result;
+            musicManager.getScheduler().enqueue(tr.getTrack());
+            event.getHook().sendMessage("Added: " + tr.getTrack().getInfo().getTitle()).queue();
 
-                    if (tracks.isEmpty()) {
-                        event.getHook().sendMessage("Baka! Playlist is empty! 🥶").queue();
-                        return;
-                    }
+        } else if (result instanceof PlaylistLoaded) {
+            PlaylistLoaded pl = (PlaylistLoaded) result;
+            pl.getTracks().forEach(musicManager.getScheduler()::enqueue);
+            event.getHook().sendMessage("Added playlist: " + pl.getInfo().getName()).queue();
 
-                    for (Track track : tracks) {
-                        musicManager.getScheduler().enqueue(track);
-                    }
-
-                    event.getHook().sendMessage("🧊 Freezing playlist: **" + playlistLoaded.getInfo().getName() + "** (" + tracks.size() + " tracks)").queue();
-                }
-                case SearchResult searchResult -> {
-                    var track = searchResult.getTracks().getFirst();
-                    musicManager.getScheduler().enqueue(track);
-                    event.getHook().sendMessage("⑨ Found and added: **" + track.getInfo().getTitle() + "**").queue();
-                }
-                case NoMatches noMatches -> {
-                    event.getHook().sendMessage("W-What?! Found nothing!").queue();
-                }
-                case LoadFailed loadFailed -> {
-                    event.getHook().sendMessage("Error! My ice powers failed: " + loadFailed.getException().getMessage()).queue();
-                }
-                default -> event.getHook().sendMessage("I got a weird result, Baka!").queue();
+        } else if (result instanceof SearchResult) {
+            SearchResult sr = (SearchResult) result;
+            if (!sr.getTracks().isEmpty()) {
+                var track = sr.getTracks().getFirst();
+                musicManager.getScheduler().enqueue(track);
+                event.getHook().sendMessage("Found: " + track.getInfo().getTitle()).queue();
+            } else {
+                event.getHook().sendMessage("Nothing found!").queue();
             }
-        });
+
+        } else if (result instanceof NoMatches) {
+            event.getHook().sendMessage("No matches found!").queue();
+
+        } else if (result instanceof LoadFailed) {
+            LoadFailed lf = (LoadFailed) result;
+            event.getHook().sendMessage("Error: " + lf.getException().getMessage()).queue();
+        }
     }
 
     @Override
     public List<OptionData> getOptions() {
-        var urlOption = new OptionData(OptionType.STRING, "url", "The link or search query to be frozen")
-                .setRequired(true);
-
-        var sourceOption = new OptionData(OptionType.STRING, "source", "Where to search (Default: YouTube)")
-                .setRequired(false)
-                .addChoice("YouTube", "ytsearch:")
-                .addChoice("YouTube Music", "ytmsearch:")
-                .addChoice("SoundCloud", "scsearch:")
-                .addChoice("Deezer", "dzsearch:")
-                .addChoice("Spotify", "spsearch:");
-
-        return List.of(urlOption, sourceOption);
+        return List.of(
+                new OptionData(OptionType.STRING, "url", "URL or Search Query").setRequired(true),
+                // ВОТ ОНИ, ВСЕ ИСТОЧНИКИ:
+                new OptionData(OptionType.STRING, "source", "Source (Default: YouTube)").setRequired(false)
+                        .addChoice("YouTube", "ytsearch:")
+                        .addChoice("YouTube Music", "ytmsearch:")
+                        .addChoice("SoundCloud", "scsearch:")
+                        .addChoice("Spotify", "spsearch:")
+                        .addChoice("Deezer", "dzsearch:")
+        );
     }
 }

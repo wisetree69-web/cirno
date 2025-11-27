@@ -38,10 +38,11 @@ public class Main {
                 new StopCommand(playerManager),
                 new ShuffleCommand(playerManager),
                 new QueueCommand(playerManager),
-                new SearchCommand(playerManager, voiceService)
+                new SearchCommand(playerManager, voiceService),
+                new DashboardCommand(playerManager)
         );
 
-        var listener = new BotListener(registry, playerManager);
+        var listener = new BotListener(registry, playerManager, voiceService);
 
         // 4. Build and Start JDA
         var jda = JDABuilder

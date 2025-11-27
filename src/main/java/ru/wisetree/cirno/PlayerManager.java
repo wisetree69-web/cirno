@@ -8,15 +8,22 @@ import dev.arbjerg.lavalink.protocol.v4.Message.EmittedEvent.TrackEndEvent.Audio
 import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class PlayerManager {
     private final LavalinkClient client;
     private final Map<Long, GuildMusicManager> musicManagers = new ConcurrentHashMap<>();
 
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "dashboard-ticker");
+        t.setDaemon(true);
+        return t;
+    });
+
     public PlayerManager(long botId) {
         this.client = new LavalinkClient(botId);
 
-        // Cirno Node: The Strongest!
         client.addNode(
                 new NodeOptions.Builder()
                         .setName("ice-fairy-node-⑨")
@@ -30,10 +37,8 @@ public class PlayerManager {
             var guildId = event.getGuildId();
             var musicManager = getGuildMusicManager(guildId);
 
-            // 1. Save the track that just finished as "last played"
             musicManager.getScheduler().setLastPlayedTrack(event.getTrack());
 
-            // 2. Check if we should start the next one
             boolean shouldStartNext = reason == AudioTrackEndReason.FINISHED ||
                     reason == AudioTrackEndReason.LOAD_FAILED;
 
@@ -46,9 +51,11 @@ public class PlayerManager {
     public GuildMusicManager getGuildMusicManager(long guildId) {
         return musicManagers.computeIfAbsent(guildId, id -> {
             var link = client.getOrCreateLink(id);
-            return new GuildMusicManager(link);
+            return new GuildMusicManager(link, scheduler);
         });
     }
+
+
 
     public LavalinkClient getClient() {
         return client;
