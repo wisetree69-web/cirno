@@ -12,7 +12,17 @@ public class GuildMusicManager {
     public GuildMusicManager(Link link, ScheduledExecutorService executor) {
         this.scheduler = new TrackScheduler(link);
         this.dashboard = new DashboardController(scheduler, executor);
-        this.scheduler.setDashboard(dashboard);
+        this.scheduler.addListener(dashboard);
+    }
+
+    public void destroy() {
+        scheduler.clearQueue();
+        scheduler.stopPlayer();
+
+        scheduler.removeListener(dashboard);
+        if (dashboard != null) {
+            dashboard.deleteMessage();
+        }
     }
 
     public TrackScheduler getScheduler() {

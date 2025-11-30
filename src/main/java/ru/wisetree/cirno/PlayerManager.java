@@ -24,11 +24,17 @@ public class PlayerManager {
     public PlayerManager(long botId) {
         this.client = new LavalinkClient(botId);
 
+        String lavalinkUri = System.getenv("LAVALINK_URI");
+        if (lavalinkUri == null) lavalinkUri = "ws://localhost:2333";
+
+        String lavalinkPass = System.getenv("LAVALINK_PASSWORD");
+        if (lavalinkPass == null) lavalinkPass = "youshallnotpass";
+
         client.addNode(
                 new NodeOptions.Builder()
-                        .setName("ice-fairy-node-⑨")
-                        .setServerUri(URI.create("ws://localhost:2333"))
-                        .setPassword("youshallnotpass")
+                        .setName("ice-fairy-node")
+                        .setServerUri(URI.create(lavalinkUri))
+                        .setPassword(lavalinkPass)
                         .build()
         );
 

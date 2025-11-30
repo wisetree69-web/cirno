@@ -4,26 +4,35 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ru.wisetree.cirno.MessageType;
+import ru.wisetree.cirno.SchedulerEventListener;
 import ru.wisetree.cirno.TrackScheduler;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class DashboardController {
+public class DashboardController implements SchedulerEventListener {
     private static final Logger log = LoggerFactory.getLogger(DashboardController.class);
+    private static final int MAX_IDLE_SECONDS = 300;
+    private static final int TICK_INTERVAL = 10;
+    private static final int LOGS_LIMIT = 15;
 
     private final TrackScheduler scheduler;
     private final DashboardRenderer renderer;
-    private Message dashboardMessage;
-    private final List<String> logHistory = Collections.synchronizedList(new ArrayList<>());
-
+    private final Deque<String> logHistory = new ConcurrentLinkedDeque<>();
     private final ScheduledExecutorService executor;
-    private ScheduledFuture<?> tickerTask;
-    private boolean updatePending = false;
+    private final AtomicBoolean updatePending = new AtomicBoolean(false);
+    private final AtomicInteger idleSecondsCounter = new AtomicInteger(0);
+
+    private volatile ScheduledFuture<?> tickerTask;
+    private volatile Message dashboardMessage;
 
     public DashboardController(TrackScheduler scheduler, ScheduledExecutorService executor) {
         this.scheduler = scheduler;
@@ -38,9 +47,12 @@ public class DashboardController {
             stopTicker();
         }
 
+        idleSecondsCounter.set(0);
+
         channel.sendMessage(net.dv8tion.jda.api.utils.messages.MessageCreateData.fromContent("❄️ **Loading Cirno's Ice Dashboard...**"))
                 .queue(msg -> {
                     this.dashboardMessage = msg;
+                    updatePending.set(true);
                     forceUpdate();
                     startTicker();
                 });
@@ -50,10 +62,25 @@ public class DashboardController {
         if (tickerTask != null && !tickerTask.isCancelled()) return;
 
         tickerTask = executor.scheduleAtFixedRate(() -> {
-            if (scheduler.getCurrentTrack() != null && !scheduler.isPaused()) {
-                requestUpdate();
+            try {
+                boolean isPlaying = scheduler.getCurrentTrack() != null;
+                boolean isQueueNotEmpty = !scheduler.getQueue().isEmpty();
+
+                if (isPlaying || isQueueNotEmpty) {
+                    idleSecondsCounter.set(0);
+                    requestUpdate();
+                } else {
+                    idleSecondsCounter.getAndAdd(TICK_INTERVAL);
+
+                    if (idleSecondsCounter.get() >= MAX_IDLE_SECONDS) {
+                        log.info("Dashboard idle timeout. Deleting message.");
+                        deleteMessage();
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error in ticker", e);
             }
-        }, 10, 10, TimeUnit.SECONDS);
+        }, TICK_INTERVAL, TICK_INTERVAL, TimeUnit.SECONDS);
     }
 
     private void stopTicker() {
@@ -64,11 +91,9 @@ public class DashboardController {
     }
 
     public void addLog(String message) {
-        synchronized (logHistory) {
-            if (logHistory.size() >= 15) {
-                logHistory.removeFirst();
-            }
-            logHistory.add(message);
+        logHistory.add(message);
+        while (logHistory.size() > LOGS_LIMIT) {
+            logHistory.poll();
         }
         requestUpdate();
     }
@@ -84,24 +109,18 @@ public class DashboardController {
     public void requestUpdate() {
         if (dashboardMessage == null) return;
 
-        synchronized (this) {
-            if (updatePending) return;
-            updatePending = true;
-        }
+        if (updatePending.get()) return;
+        if(!updatePending.compareAndSet(false, true)) return;
 
         executor.schedule(this::forceUpdate, 1000, TimeUnit.MILLISECONDS);
     }
 
     private void forceUpdate() {
-        synchronized (this) {
-            updatePending = false;
-        }
+        if(!updatePending.compareAndSet(true, false)) return;
         if (dashboardMessage == null) return;
 
         List<String> logSnapshot;
-        synchronized (logHistory) {
-            logSnapshot = new ArrayList<>(logHistory);
-        }
+        logSnapshot = new ArrayList<>(logHistory);
 
         dashboardMessage.editMessage(renderer.render(scheduler, logSnapshot))
                 .queue(
@@ -114,5 +133,26 @@ public class DashboardController {
                             }
                         }
                 );
+    }
+
+    public void deleteMessage() {
+        if (dashboardMessage != null) {
+            dashboardMessage.delete().queue(s -> {}, e -> {});
+            dashboardMessage = null;
+        }
+        stopTicker();
+    }
+
+    @Override
+    public void onTrackStartOrStop() {
+        requestUpdate();
+    }
+
+    @Override
+    public void onSchedulerMessage(String message, MessageType messageType) {
+        switch (messageType) {
+            case SUCCESS -> addSuccess(message);
+            case INFO -> addLog(message);
+        }
     }
 }

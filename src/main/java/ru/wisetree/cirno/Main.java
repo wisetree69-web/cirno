@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.wisetree.cirno.commands.*;
 import ru.wisetree.cirno.services.JdaVoiceChannelService;
+import ru.wisetree.cirno.services.VoiceEventHandler;
 
 import java.util.Base64;
 
@@ -40,13 +41,14 @@ public class Main {
         );
 
         var listener = new BotListener(registry, playerManager, voiceService);
+        var voiceListener = new VoiceEventHandler(playerManager);
 
         var jda = JDABuilder
                 .createDefault(token)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_VOICE_STATES)
                 .enableCache(CacheFlag.VOICE_STATE)
                 .setVoiceDispatchInterceptor(new JDAVoiceUpdateListener(playerManager.getClient()))
-                .addEventListeners(listener)
+                .addEventListeners(listener, voiceListener)
                 .build();
 
         jda.awaitReady();

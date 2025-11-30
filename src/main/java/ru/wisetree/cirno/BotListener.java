@@ -1,20 +1,22 @@
 package ru.wisetree.cirno;
 
-import dev.arbjerg.lavalink.client.player.*;
+import dev.arbjerg.lavalink.client.player.PlaylistLoaded;
+import dev.arbjerg.lavalink.client.player.SearchResult;
+import dev.arbjerg.lavalink.client.player.Track;
+import dev.arbjerg.lavalink.client.player.TrackLoaded;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
-import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.interactions.components.text.TextInput;
 import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
 import net.dv8tion.jda.api.interactions.modals.Modal;
+import org.jetbrains.annotations.NotNull;
+import ru.wisetree.cirno.handlers.*;
 import ru.wisetree.cirno.services.VoiceChannelService;
 
 import java.awt.*;
@@ -27,25 +29,16 @@ public class BotListener extends ListenerAdapter {
     private final CommandRegistry commandRegistry;
     private final PlayerManager playerManager;
     private final VoiceChannelService voiceService; // <-- Добавили сервис
+    private final ButtonHandlerRegistry buttonHandlerRegistry = new ButtonHandlerRegistry();
 
     public BotListener(CommandRegistry commandRegistry, PlayerManager playerManager, VoiceChannelService voiceService) {
         this.commandRegistry = commandRegistry;
         this.playerManager = playerManager;
         this.voiceService = voiceService;
-    }
-
-    private boolean ensureVoiceDisconnected(Member member, IReplyCallback event) {
-        try {
-            voiceService.joinMemberChannel(member);
-            return false;
-        } catch (Exception e) {
-            if (!event.isAcknowledged()) {
-                event.reply("❌ **Baka!** You must be in a voice channel!").setEphemeral(true).queue();
-            } else {
-                event.getHook().sendMessage("❌ **Baka!** You must be in a voice channel!").setEphemeral(true).queue();
-            }
-            return true;
-        }
+        buttonHandlerRegistry.register(new PlayerControlHandler(playerManager, voiceService));
+        buttonHandlerRegistry.register(new SearchSelectionHandler(playerManager, voiceService));
+        buttonHandlerRegistry.register(new MenuHandler(voiceService));
+        buttonHandlerRegistry.register(new BegoneHandler(playerManager));
     }
 
     @Override
@@ -56,76 +49,8 @@ public class BotListener extends ListenerAdapter {
     }
 
     @Override
-    public void onButtonInteraction(ButtonInteractionEvent event) {
-        String id = event.getComponentId();
-        var guild = event.getGuild();
-        var member = event.getMember();
-        if (guild == null || member == null) return;
-
-        if (id.startsWith("search:")) {
-            if (ensureVoiceDisconnected(member, event)) return;
-            handleSearchResultSelection(event, id);
-            return;
-        }
-
-        switch (id) {
-            case "cmd:quick_load" -> {
-                if (ensureVoiceDisconnected(member, event)) return;
-
-                TextInput input = TextInput.create("query", "URL or Query", TextInputStyle.SHORT)
-                        .setPlaceholder("Paste link or type song name...")
-                        .setRequired(true).build();
-                Modal modal = Modal.create("modal:quick", "Quick Load ⚡").addActionRow(input).build();
-                event.replyModal(modal).queue();
-                return;
-            }
-
-
-            case "cmd:deep_search" -> {
-                if (ensureVoiceDisconnected(member, event)) return;
-
-                StringSelectMenu menu = StringSelectMenu.create("menu:search_source")
-                        .setPlaceholder("Select Music Service")
-                        .addOption("YouTube", "ytsearch:")
-                        .addOption("YouTube Music", "ytmsearch:")
-                        .addOption("Spotify", "spsearch:")
-                        .addOption("SoundCloud", "scsearch:")
-                        .addOption("Deezer", "dzsearch:")
-                        .build();
-
-                event.reply("Choose where to search:").setEphemeral(true)
-                        .addActionRow(menu)
-                        .queue();
-                return;
-            }
-
-
-            case "cmd:begone" -> {
-                event.deferEdit().queue();
-                var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
-                musicManager.getScheduler().clearQueue();
-                event.getMessage().delete().queue();
-
-                guild.getAudioManager().closeAudioConnection();
-                return;
-            }
-        }
-
-        if (id.startsWith("cmd:")) {
-            if (ensureVoiceDisconnected(member, event)) return;
-
-            event.deferEdit().queue();
-            var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
-            var scheduler = musicManager.getScheduler();
-
-            switch (id) {
-                case "cmd:pause" -> scheduler.pause(!scheduler.isPaused());
-                case "cmd:skip" -> scheduler.skip(1);
-                case "cmd:stop" -> scheduler.clearQueue();
-                case "cmd:shuffle" -> scheduler.shuffle();
-                case "cmd:flow" -> scheduler.setFlowMode(!scheduler.isFlowMode());
-            }
-        }
+    public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
+        buttonHandlerRegistry.handle(event);
     }
 
     @Override
@@ -239,32 +164,6 @@ public class BotListener extends ListenerAdapter {
         event.getHook().sendMessageEmbeds(eb.build())
                 .setComponents(ActionRow.of(buttons), ActionRow.of(controls))
                 .queue();
-    }
-
-    private void handleSearchResultSelection(ButtonInteractionEvent event, String id) {
-        String uri = id.substring(7);
-
-        event.getMessage().delete().queue();
-
-        if (uri.equals("cancel")) {
-            event.deferEdit().queue();
-            return;
-        }
-
-        // Если выбрали трек
-        event.deferReply().setEphemeral(true).queue(); // Говорим "думаю..." (скрыто)
-
-        var manager = playerManager.getGuildMusicManager(Objects.requireNonNull(event.getGuild()).getIdLong());
-        var link = playerManager.getClient().getOrCreateLink(event.getGuild().getIdLong());
-
-        link.loadItem(uri).subscribe(res -> {
-            if (res instanceof TrackLoaded tr) {
-                manager.getScheduler().enqueue(tr.getTrack());
-
-                manager.getDashboard().addSuccess("Selected: " + tr.getTrack().getInfo().getTitle());
-                event.getHook().deleteOriginal().queue();
-            }
-        });
     }
 
     private String formatTime(long millis) {
