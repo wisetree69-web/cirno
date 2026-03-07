@@ -135,6 +135,18 @@ public class DashboardController implements SchedulerEventListener {
                 );
     }
 
+    public void updateImmediately() {
+        if (dashboardMessage == null) return;
+
+        // 1. Принудительно взводим флаг.
+        // Даже если обновление уже запланировано (через секунду), мы перехватим его.
+        updatePending.set(true);
+
+        // 2. Планируем выполнение почти мгновенно (100мс для синхронизации состояния Lavalink)
+        // Мы используем schedule, а не submit, чтобы дать время Lavalink применить изменения
+        executor.schedule(this::forceUpdate, 100, TimeUnit.MILLISECONDS);
+    }
+
     public void deleteMessage() {
         if (dashboardMessage != null) {
             dashboardMessage.delete().queue(s -> {}, e -> {});

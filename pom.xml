@@ -13,7 +13,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <jda.version>5.0.0-beta.24</jda.version>
+        <jda.version>6.3.1</jda.version>
         <junit.version>6.0.1</junit.version>
         <mockito.version>5.20.0</mockito.version>
         <assertj.version>3.27.6</assertj.version>
@@ -26,7 +26,7 @@
         <commons-io.version>2.21.0</commons-io.version>
         <youtube-source.version>c97016c55280af59ddf799b7f0c20630e6472fd4-SNAPSHOT</youtube-source.version>
         <lavasrc.version>4.8.1</lavasrc.version>
-        <lavalink-client.version>3.2.0</lavalink-client.version>
+        <lavalink-client.version>3.4.0</lavalink-client.version>
     </properties>
 
     <repositories>

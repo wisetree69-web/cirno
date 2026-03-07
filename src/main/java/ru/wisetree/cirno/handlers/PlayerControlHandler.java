@@ -17,7 +17,6 @@ public class PlayerControlHandler extends VoiceRequiredButtonHandler {
         if (!componentId.startsWith("cmd:")) {
             return false;
         }
-
         return isCompatibleCommand(componentId);
     }
 
@@ -31,8 +30,11 @@ public class PlayerControlHandler extends VoiceRequiredButtonHandler {
     protected void handleButton(ButtonInteractionEvent event) {
         String id = event.getComponentId();
         var guild = event.getGuild();
-        if (guild == null) return;
-        var scheduler = playerManager.getGuildMusicManager(guild.getIdLong()).getScheduler();
+        assert guild != null;
+
+        var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
+        var scheduler = musicManager.getScheduler();
+
         event.deferEdit().queue();
 
         switch (id) {
@@ -42,5 +44,8 @@ public class PlayerControlHandler extends VoiceRequiredButtonHandler {
             case "cmd:shuffle" -> scheduler.shuffle();
             case "cmd:flow" -> scheduler.setFlowMode(!scheduler.isFlowMode());
         }
+
+        // 🔥 ФИЧА: Мгновенное обновление после действия
+        musicManager.getDashboard().updateImmediately();
     }
 }
