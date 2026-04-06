@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -21,11 +20,9 @@ import java.util.stream.Collectors;
 public class TrackScheduler {
     private static final Logger log = LoggerFactory.getLogger(TrackScheduler.class);
 
-    // Внутренняя обертка, чтобы знать, откуда пришел трек
     private record QueuedTrack(Track track, boolean isFlow) {}
 
     private final Link link;
-    // Меняем тип очереди на нашу обертку
     private final BlockingQueue<QueuedTrack> queue;
     private final List<SchedulerEventListener> listeners;
 
@@ -47,27 +44,21 @@ public class TrackScheduler {
         listeners.remove(listener);
     }
 
-    // Этот метод вызывается ТОЛЬКО пользователем (команды /play, кнопки)
     public synchronized void enqueue(Track track) {
         if (currentTrack == null) {
             startTrack(track);
             messageListeners("Starting: " + track.getInfo().getTitle(), MessageType.SUCCESS);
         } else {
-            // 🔥 ФИЧА: Если юзер добавляет трек, сносим все Flow-треки из очереди
             purgeFlowTracks();
-
-            // Добавляем трек пользователя (isFlow = false)
             offerToQueue(track, false);
             messageListeners("Queued: " + track.getInfo().getTitle(), MessageType.SUCCESS);
         }
     }
 
     private void purgeFlowTracks() {
-        // Удаляем все треки, где isFlow == true
         boolean removed = queue.removeIf(QueuedTrack::isFlow);
         if (removed) {
             log.info("Purged flow tracks from queue because user added a track.");
-            // Можно уведомить, но лучше тихо, чтобы не спамить
         }
     }
 
@@ -91,7 +82,6 @@ public class TrackScheduler {
         }
     }
 
-    // Приватный метод для добавления в очередь с флагом
     private void offerToQueue(Track track, boolean isFlow) {
         QueuedTrack qt = new QueuedTrack(track, isFlow);
         if (!queue.offer(qt)) {
@@ -148,7 +138,6 @@ public class TrackScheduler {
             if (result instanceof PlaylistLoaded playlist) {
                 for (Track track : playlist.getTracks()) {
                     if (!track.getInfo().getIdentifier().equals(identifier)) {
-                        // 🔥 Добавляем как Flow-треки (isFlow = true)
                         offerToQueue(track, true);
                     }
                 }
@@ -181,7 +170,6 @@ public class TrackScheduler {
 
     @NotNull
     private String getQuery() {
-        // Null-check на всякий случай, хотя логика nextTrack защищает
         if (lastPlayedTrack == null) return "ytsearch:Cirno Theme";
 
         String identifier = lastPlayedTrack.getInfo().getIdentifier();
@@ -202,19 +190,19 @@ public class TrackScheduler {
         return query;
     }
 
+    // Исправлено: неблокирующий вызов
     public void pause(boolean state) {
-        link.getPlayer().subscribe(player ->
-                player.setPaused(state).subscribe(r ->
-                        messageListeners(state ? "🥶 Playback Frozen" : "▶ Playback Thawed", MessageType.INFO))
-        );
+        link.createOrUpdatePlayer()
+                .setPaused(state)
+                .subscribe(player ->
+                        messageListeners(state ? "🥶 Playback Frozen" : "▶ Playback Thawed", MessageType.INFO)
+                );
     }
 
+    // Исправлено: неблокирующий вызов
     public boolean isPaused() {
-        try {
-            return Objects.requireNonNull(link.getPlayer().block()).getPaused();
-        } catch (Exception e) {
-            return false;
-        }
+        var player = link.getCachedPlayer();
+        return player != null && player.getPaused();
     }
 
     public synchronized void shuffle() {
@@ -238,7 +226,6 @@ public class TrackScheduler {
         messageListeners("Skipped " + amount + " tracks.", MessageType.SUCCESS);
     }
 
-    // Адаптер для внешнего мира: возвращаем List<Track>, скрывая нашу обертку
     public List<Track> getQueueList() {
         return queue.stream()
                 .map(qt -> qt.track)
@@ -262,20 +249,15 @@ public class TrackScheduler {
         this.lastPlayedTrack = track;
     }
 
-    // Возвращаем сырую очередь (если нужно для дебага), но лучше использовать getQueueList
     public BlockingQueue<Track> getQueue() {
-        // ВАЖНО: Раньше мы возвращали саму очередь.
-        // Теперь мы не можем вернуть BlockingQueue<QueuedTrack> как BlockingQueue<Track>.
-        // Создаем копию для совместимости, если кто-то вызывает этот метод.
         return new LinkedBlockingQueue<>(getQueueList());
     }
 
+    // Исправлено: неблокирующий вызов
     public long getPosition() {
         if (currentTrack == null) return 0;
-        return link.getPlayer()
-                .map(dev.arbjerg.lavalink.client.player.LavalinkPlayer::getPosition)
-                .blockOptional()
-                .orElse(0L);
+        var player = link.getCachedPlayer();
+        return player != null ? player.getPosition() : 0L;
     }
 
     private void notifyListenersOnTrackStartOrStop() {

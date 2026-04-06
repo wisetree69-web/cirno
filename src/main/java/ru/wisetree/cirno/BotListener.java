@@ -10,16 +10,19 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
-import net.dv8tion.jda.api.interactions.components.text.TextInput;
-import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
-import net.dv8tion.jda.api.interactions.modals.Modal;
+
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
+import net.dv8tion.jda.api.components.textinput.TextInput;
+import net.dv8tion.jda.api.components.textinput.TextInputStyle;
+import net.dv8tion.jda.api.components.label.Label; // НОВЫЙ ИМПОРТ
+import net.dv8tion.jda.api.modals.Modal;
+
 import org.jetbrains.annotations.NotNull;
 import ru.wisetree.cirno.handlers.*;
 import ru.wisetree.cirno.services.VoiceChannelService;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -28,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 public class BotListener extends ListenerAdapter {
     private final CommandRegistry commandRegistry;
     private final PlayerManager playerManager;
-    private final VoiceChannelService voiceService; // <-- Добавили сервис
+    private final VoiceChannelService voiceService;
     private final ButtonHandlerRegistry buttonHandlerRegistry = new ButtonHandlerRegistry();
 
     public BotListener(CommandRegistry commandRegistry, PlayerManager playerManager, VoiceChannelService voiceService) {
@@ -60,12 +63,15 @@ public class BotListener extends ListenerAdapter {
 
             String sourcePrefix = event.getValues().getFirst();
 
-            TextInput input = TextInput.create("query", "Search Query", TextInputStyle.SHORT)
+            // ИСПРАВЛЕНО: Создаем только само поле ввода (без заголовка)
+            TextInput input = TextInput.create("query", TextInputStyle.SHORT)
                     .setPlaceholder("What are we looking for?")
                     .setRequired(true).build();
 
+            // ИСПРАВЛЕНО: Оборачиваем поле ввода в Label (который содержит заголовок)
+            // Примечание: если Label.of подчеркивается красным, замени на Label.create("Search Query", input)
             Modal modal = Modal.create("modal:deep:" + sourcePrefix, "Deep Search 🔎")
-                    .addActionRow(input).build();
+                    .addComponents(Label.of("Search Query", input)).build();
 
             event.replyModal(modal).queue();
         }
@@ -78,7 +84,6 @@ public class BotListener extends ListenerAdapter {
         var guild = event.getGuild();
         var member = event.getMember();
         if (guild == null || member == null) return;
-
 
         try {
             voiceService.joinMemberChannel(member);

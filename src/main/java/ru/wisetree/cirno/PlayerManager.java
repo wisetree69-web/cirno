@@ -45,10 +45,8 @@ public class PlayerManager {
 
             musicManager.getScheduler().setLastPlayedTrack(event.getTrack());
 
-            boolean shouldStartNext = reason == AudioTrackEndReason.FINISHED ||
-                    reason == AudioTrackEndReason.LOAD_FAILED;
-
-            if (shouldStartNext) {
+            // Современный способ проверки (Lavalink v4)
+            if (reason.getMayStartNext()) {
                 musicManager.getScheduler().nextTrack();
             }
         });
@@ -60,8 +58,6 @@ public class PlayerManager {
             return new GuildMusicManager(link, scheduler);
         });
     }
-
-
 
     public LavalinkClient getClient() {
         return client;

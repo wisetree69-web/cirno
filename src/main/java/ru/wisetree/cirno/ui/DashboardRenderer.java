@@ -3,13 +3,14 @@ package ru.wisetree.cirno.ui;
 import dev.arbjerg.lavalink.client.player.Track;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
-import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
+// НОВЫЕ ИМПОРТЫ JDA
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageEditData;
 import ru.wisetree.cirno.TrackScheduler;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -17,7 +18,6 @@ public class DashboardRenderer {
 
     private static final Color CIRNO_COLOR = new Color(153, 204, 255);
     private static final String CIRNO_IMG_IDLE = "https://media.tenor.com/iPKa5SFvaKAAAAAi/touhou-cirno.gif";
-    // private static final String CIRNO_IMG_PLAYING = "https://media.tenor.com/f4xSIqFf3gwAAAAi/konakonagifs-touhou.gif";
 
     public MessageEditData render(TrackScheduler scheduler, List<String> logEntries) {
         Track current = scheduler.getCurrentTrack();
@@ -33,7 +33,6 @@ public class DashboardRenderer {
         } else {
             String statusIcon = isPaused ? "II (FROZEN)" : "▶ (PLAYING)";
             eb.setTitle("⑨ " + statusIcon + ": " + current.getInfo().getTitle(), current.getInfo().getUri());
-            //eb.setImage(current.getInfo().getArtworkUrl() != null ? current.getInfo().getArtworkUrl() : CIRNO_IMG_PLAYING);
             eb.setDescription(buildProgressBar(scheduler));
             eb.addField("Author", current.getInfo().getAuthor(), true);
             eb.addField("Source", current.getInfo().getSourceName(), true);

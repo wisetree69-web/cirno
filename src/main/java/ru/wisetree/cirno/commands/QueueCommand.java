@@ -6,7 +6,7 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import ru.wisetree.cirno.PlayerManager;
 
-import java.awt.*;
+import java.awt.Color; // Исправлено
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 

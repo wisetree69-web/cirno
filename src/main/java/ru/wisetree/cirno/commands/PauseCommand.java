@@ -28,15 +28,13 @@ public class PauseCommand implements Command {
         var guild = event.getGuild();
         if (guild == null) return;
 
-        var link = playerManager.getClient().getOrCreateLink(guild.getIdLong());
+        var manager = playerManager.getGuildMusicManager(guild.getIdLong());
+        boolean isPaused = manager.getScheduler().isPaused();
 
-        link.getPlayer().subscribe(player -> {
-            boolean isPaused = player.getPaused();
-            player.setPaused(!isPaused).subscribe();
+        manager.getScheduler().pause(!isPaused);
 
-            String status = !isPaused ? "FROZEN 🥶" : "UNFROZEN! Time to go! ▶️";
-            event.reply("Music is now " + status).queue();
-        });
+        String status = !isPaused ? "FROZEN 🥶" : "UNFROZEN! Time to go! ▶️";
+        event.reply("Music is now " + status).queue();
     }
 
     @Override
