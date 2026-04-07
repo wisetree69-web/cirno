@@ -60,28 +60,30 @@ public class DashboardController implements SchedulerEventListener {
     }
 
     private void startTicker() {
-//        if (tickerTask != null && !tickerTask.isCancelled()) return;
-//
-//        tickerTask = executor.scheduleAtFixedRate(() -> {
-//            try {
-//                boolean isPlaying = scheduler.getCurrentTrack() != null;
-//                boolean isQueueNotEmpty = !scheduler.getQueue().isEmpty();
-//
-//                if (isPlaying || isQueueNotEmpty) {
-//                    idleSecondsCounter.set(0);
-//                    requestUpdate();
-//                } else {
-//                    idleSecondsCounter.getAndAdd(TICK_INTERVAL);
-//
-//                    if (idleSecondsCounter.get() >= MAX_IDLE_SECONDS) {
-//                        log.info("Dashboard idle timeout. Deleting message.");
-//                        deleteMessage();
-//                    }
-//                }
-//            } catch (Exception e) {
-//                log.error("Error in ticker", e);
-//            }
-//        }, TICK_INTERVAL, TICK_INTERVAL, TimeUnit.SECONDS);
+        if (tickerTask != null && !tickerTask.isCancelled()) return;
+
+        tickerTask = executor.scheduleAtFixedRate(() -> {
+            try {
+                boolean isPlaying = scheduler.getCurrentTrack() != null;
+                boolean isPaused = scheduler.isPaused();
+                boolean isQueueNotEmpty = !scheduler.getQueue().isEmpty();
+
+                if (isPlaying || isQueueNotEmpty) {
+                    idleSecondsCounter.set(0);
+                    if (isPlaying && !isPaused) {
+                        requestUpdate();
+                    }
+                } else {
+                    idleSecondsCounter.getAndAdd(TICK_INTERVAL);
+
+                    if (idleSecondsCounter.get() >= MAX_IDLE_SECONDS) {
+                        deleteMessage();
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error in ticker", e);
+            }
+        }, TICK_INTERVAL, TICK_INTERVAL, TimeUnit.SECONDS);
     }
 
     private void stopTicker() {
@@ -113,7 +115,7 @@ public class DashboardController implements SchedulerEventListener {
         if (updatePending.get()) return;
         if(!updatePending.compareAndSet(false, true)) return;
 
-        executor.schedule(this::forceUpdate, 2000, TimeUnit.MILLISECONDS);
+        executor.schedule(this::forceUpdate, DEBOUNCE_DELAY_MS, TimeUnit.MILLISECONDS);
     }
 
     private void forceUpdate() {

@@ -28,7 +28,7 @@ public class PlayerManager {
         if (lavalinkUri == null) lavalinkUri = "ws://localhost:2333";
 
         String lavalinkPass = System.getenv("LAVALINK_PASSWORD");
-        if (lavalinkPass == null) lavalinkPass = "youshallnotpass";
+        if (lavalinkPass == null) lavalinkPass = "";
 
         client.addNode(
                 new NodeOptions.Builder()
