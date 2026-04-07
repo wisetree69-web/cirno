@@ -1,0 +1,35 @@
+services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:latest
+    container_name: lavalink
+    restart: always
+    cpu_shares: 2048
+    ports:
+      - "127.0.0.1:2333:2333"
+    volumes:
+      - ./lavalink/application.yaml:/opt/Lavalink/application.yaml
+    entrypoint: java -Xmx1G -XX:+UseZGC -jar Lavalink.jar --lavalink.server.password=${LAVALINK_PASSWORD} 
+    ulimits:
+      nice:
+        soft: -15
+        hard: -15
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  bot:
+    image: wisetreex/cirno-bot:latest
+    container_name: cirno_bot
+    restart: always
+    cpu_shares: 512
+    depends_on:
+      - lavalink
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - LAVALINK_URI=ws://lavalink:2333
+      - LAVALINK_PASSWORD=${LAVALINK_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 500M
