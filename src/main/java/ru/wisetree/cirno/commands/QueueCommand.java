@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import ru.wisetree.cirno.PlayerManager;
+import ru.wisetree.cirno.TrackScheduler;
 
 import java.awt.Color; // Исправлено
 import java.util.List;
@@ -41,12 +42,12 @@ public class QueueCommand implements Command {
         }
 
         EmbedBuilder eb = new EmbedBuilder();
-        eb.setTitle("⑨ Cirno's FREEZE Queue! 🧊");
+        eb.setTitle("🧊 Cirno's Queue");
         eb.setColor(CIRNO_BLUE);
 
         if (current != null) {
-            eb.addField("Now Playing (The Strongest!):",
-                    "[" + current.getInfo().getTitle() + "](" + current.getInfo().getUri() + ")",
+            eb.addField("Now Playing:",
+                    "[" + TrackScheduler.getDisplayTitle(current) + "](" + current.getInfo().getUri() + ")",
                     false);
         }
 
@@ -56,7 +57,7 @@ public class QueueCommand implements Command {
             if (count >= 9) break;
             count++;
             sb.append(count).append(". ")
-                    .append(track.getInfo().getTitle())
+                    .append(TrackScheduler.getDisplayTitle(track))
                     .append(" `[")
                     .append(formatTime(track.getInfo().getLength()))
                     .append("]`\n");

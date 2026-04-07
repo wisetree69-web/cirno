@@ -32,20 +32,22 @@ public class PlayerControlHandler extends VoiceRequiredButtonHandler {
         var guild = event.getGuild();
         assert guild != null;
 
+        String userName = event.getMember() != null ? event.getMember().getEffectiveName() : "Unknown";
+
         var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
         var scheduler = musicManager.getScheduler();
+        var dashboard = musicManager.getDashboard();
 
         event.deferEdit().queue();
 
         switch (id) {
-            case "cmd:pause" -> scheduler.pause(!scheduler.isPaused());
-            case "cmd:skip" -> scheduler.skip(1);
-            case "cmd:stop" -> scheduler.clearQueue();
-            case "cmd:shuffle" -> scheduler.shuffle();
-            case "cmd:flow" -> scheduler.setFlowMode(!scheduler.isFlowMode());
+            case "cmd:pause" -> scheduler.pause(!scheduler.isPaused(), userName);
+            case "cmd:skip" -> scheduler.skip(1, userName);
+            case "cmd:stop" -> scheduler.clearQueue(userName);
+            case "cmd:shuffle" -> scheduler.shuffle(userName);
+            case "cmd:flow" -> scheduler.setFlowMode(!scheduler.isFlowMode(), userName);
         }
 
-        // 🔥 ФИЧА: Мгновенное обновление после действия
         musicManager.getDashboard().updateImmediately();
     }
 }

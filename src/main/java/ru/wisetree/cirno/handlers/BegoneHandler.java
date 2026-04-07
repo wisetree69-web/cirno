@@ -20,10 +20,13 @@ public class BegoneHandler implements  IButtonHandler {
         var guild = event.getGuild();
         if (guild == null) return;
 
+        String userName = event.getMember() != null ? event.getMember().getEffectiveName() : "Unknown";
+
         event.deferEdit().queue();
         var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
         musicManager.getScheduler().clearQueue();
-        event.getMessage().delete().queue();
+        musicManager.getDashboard().addLog("👋 Dismissed", userName);
+        musicManager.getDashboard().deleteMessage();
 
         guild.getAudioManager().closeAudioConnection();
     }

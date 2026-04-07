@@ -18,7 +18,7 @@ public class DashboardCommand implements Command {
     public String getName() { return "dashboard"; }
 
     @Override
-    public String getDescription() { return "Summon or reset the Cirno Music Dashboard ⑨"; }
+    public String getDescription() { return "Summon or reset the Cirno Music Dashboard."; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -32,7 +32,8 @@ public class DashboardCommand implements Command {
 
         event.deferReply().setEphemeral(true).queue(hook -> {
             var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
-            musicManager.getDashboard().create(channel);
+            String userName = event.getMember() != null ? event.getMember().getEffectiveName() : event.getUser().getName();
+            musicManager.getDashboard().create(channel, userName);
             hook.deleteOriginal().queue();
         });
     }

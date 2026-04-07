@@ -20,7 +20,7 @@ public class FlowCommand implements Command {
 
     @Override
     public String getDescription() {
-        return "Toggle Flow Mode (The Strongest Ice Radio ⑨)";
+        return "Toggle Flow Mode (auto-playing recommendations).";
     }
 
     @Override

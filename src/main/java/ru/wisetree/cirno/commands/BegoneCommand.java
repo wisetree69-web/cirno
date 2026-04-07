@@ -38,7 +38,7 @@ public class BegoneCommand implements Command {
 
         guild.getAudioManager().closeAudioConnection();
 
-        event.reply("I'm leaving! You're too weak to handle the Strongest! ⑨").queue();
+        event.reply("I'm leaving! You're too weak to handle the Strongest!").queue();
     }
 
     @Override

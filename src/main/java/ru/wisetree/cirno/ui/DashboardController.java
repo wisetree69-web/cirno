@@ -39,18 +39,19 @@ public class DashboardController implements SchedulerEventListener {
         this.scheduler = scheduler;
         this.renderer = new DashboardRenderer();
         this.executor = executor;
-        addLog("+ Dashboard initialized! The Strongest! ⑨");
+        addLog("⚙️ Init", null);
     }
 
-    public void create(GuildMessageChannel channel) {
+    public void create(GuildMessageChannel channel, String userName) {
         if (dashboardMessage != null) {
             dashboardMessage.delete().queue(s -> {}, e -> {});
             stopTicker();
         }
 
         idleSecondsCounter.set(0);
+        addLog("🤡 Spawned Cirno", userName);
 
-        channel.sendMessage(net.dv8tion.jda.api.utils.messages.MessageCreateData.fromContent("❄️ **Loading Cirno's Ice Dashboard...**"))
+        channel.sendMessage(net.dv8tion.jda.api.utils.messages.MessageCreateData.fromContent("❄️ **Loading...**"))
                 .queue(msg -> {
                     this.dashboardMessage = msg;
                     updatePending.set(true);
@@ -93,20 +94,32 @@ public class DashboardController implements SchedulerEventListener {
         }
     }
 
+    /**
+     * Add a system-level log entry (no user attribution).
+     */
     public void addLog(String message) {
-        logHistory.add(message);
+        addLog(message, null);
+    }
+
+    /**
+     * Add a log entry with user attribution.
+     */
+    public void addLog(String message, String userName) {
+        String prefix = (userName != null) ? "[" + userName + "] " : "[System] ";
+        String entry = prefix + message;
+        logHistory.add(entry);
         while (logHistory.size() > LOGS_LIMIT) {
             logHistory.poll();
         }
         requestUpdate();
     }
 
-    public void addError(String error) {
-        addLog("- [ERROR] " + error);
+    public void addError(String error, String userName) {
+        addLog("Error: " + error, userName);
     }
 
-    public void addSuccess(String msg) {
-        addLog("+ " + msg);
+    public void addSuccess(String msg, String userName) {
+        addLog(msg, userName);
     }
 
     public void requestUpdate() {
@@ -166,8 +179,16 @@ public class DashboardController implements SchedulerEventListener {
     @Override
     public void onSchedulerMessage(String message, MessageType messageType) {
         switch (messageType) {
-            case SUCCESS -> addSuccess(message);
-            case INFO -> addLog(message);
+            case SUCCESS -> addLog(message, null);
+            case INFO -> addLog(message, null);
+        }
+    }
+
+    @Override
+    public void onSchedulerMessage(String message, MessageType messageType, String userName) {
+        switch (messageType) {
+            case SUCCESS -> addSuccess(message, userName);
+            case INFO -> addLog(message, userName);
         }
     }
 }

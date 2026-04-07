@@ -29,14 +29,15 @@ public class SearchSelectionHandler extends  VoiceRequiredButtonHandler {
 
         event.deferReply().setEphemeral(true).queue();
 
+        var guild = event.getGuild();
+        var userName = guild != null && event.getMember() != null ? event.getMember().getEffectiveName() : null;
+
         var manager = playerManager.getGuildMusicManager(Objects.requireNonNull(event.getGuild()).getIdLong());
         var link = playerManager.getClient().getOrCreateLink(event.getGuild().getIdLong());
 
         link.loadItem(uri).subscribe(res -> {
             if (res instanceof TrackLoaded tr) {
-                manager.getScheduler().enqueue(tr.getTrack());
-
-                manager.getDashboard().addSuccess("Selected: " + tr.getTrack().getInfo().getTitle());
+                manager.getScheduler().enqueue(tr.getTrack(), userName);
                 event.getHook().deleteOriginal().queue();
             }
         });

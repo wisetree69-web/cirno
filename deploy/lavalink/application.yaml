@@ -33,7 +33,7 @@ lavalink:
       lowPass: false
     http:
       responseCache: false
-    bufferDurationMs: 400
+    bufferDurationMs: 800
     frameBufferDurationMs: 5000
     opusEncodingQuality: 8
     resamplingQuality: LOW

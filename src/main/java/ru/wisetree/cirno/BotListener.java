@@ -85,10 +85,12 @@ public class BotListener extends ListenerAdapter {
         var member = event.getMember();
         if (guild == null || member == null) return;
 
+        String userName = member.getEffectiveName();
+
         try {
             voiceService.joinMemberChannel(member);
         } catch (Exception e) {
-            event.reply("❌ You left the voice channel!").setEphemeral(true).queue();
+            event.reply("You are not in a voice channel.").setEphemeral(true).queue();
             return;
         }
 
@@ -98,25 +100,24 @@ public class BotListener extends ListenerAdapter {
 
         if (id.equals("modal:quick")) {
             event.deferEdit().queue();
-            dashboard.addLog("⚡ Quick Load: " + query);
 
             String search = (query.startsWith("http")) ? query : "ytsearch:" + query;
 
             link.loadItem(search).subscribe(result -> {
                 switch (result) {
-                    case TrackLoaded tr -> musicManager.getScheduler().enqueue(tr.getTrack());
+                    case TrackLoaded tr -> musicManager.getScheduler().enqueue(tr.getTrack(), userName);
                     case SearchResult sr -> {
                         if (!sr.getTracks().isEmpty()) {
-                            musicManager.getScheduler().enqueue(sr.getTracks().getFirst());
+                            musicManager.getScheduler().enqueue(sr.getTracks().getFirst(), userName);
                         } else {
-                            dashboard.addError("Nothing found!");
+                            dashboard.addError("Nothing found.", userName);
                         }
                     }
                     case PlaylistLoaded pl -> {
-                        pl.getTracks().forEach(musicManager.getScheduler()::enqueue);
-                        dashboard.addSuccess("Added playlist: " + pl.getInfo().getName());
+                        pl.getTracks().forEach(t -> musicManager.getScheduler().enqueue(t, userName));
+                        dashboard.addSuccess("Added playlist: " + pl.getInfo().getName(), userName);
                     }
-                    case null, default -> dashboard.addError("Nothing found!");
+                    case null, default -> dashboard.addError("Nothing found.", userName);
                 }
             });
         }
@@ -132,10 +133,10 @@ public class BotListener extends ListenerAdapter {
                     if (!sr.getTracks().isEmpty()) {
                         sendSearchButtons(event, sr.getTracks(), query);
                     } else {
-                        event.getHook().sendMessage("No results found!").queue();
+                        event.getHook().sendMessage("No results found.").queue();
                     }
                 } else {
-                    event.getHook().sendMessage("No results found!").queue();
+                    event.getHook().sendMessage("No results found.").queue();
                 }
             });
         }
@@ -143,7 +144,7 @@ public class BotListener extends ListenerAdapter {
 
     private void sendSearchButtons(ModalInteractionEvent event, List<Track> tracks, String query) {
         EmbedBuilder eb = new EmbedBuilder();
-        eb.setTitle("🔎 Results for: " + query);
+        eb.setTitle("Results for: " + query);
         eb.setColor(new Color(153, 204, 255));
 
         StringBuilder desc = new StringBuilder();
@@ -156,15 +157,21 @@ public class BotListener extends ListenerAdapter {
             assert uri != null;
             if (uri.length() > 80) continue;
 
+            String author = t.getInfo().getAuthor();
+            String title = TrackScheduler.getDisplayTitle(t);
+            String display = (author != null && !author.isEmpty())
+                    ? author + " — " + title
+                    : title;
+
             desc.append("**").append(i + 1).append(".** ")
-                    .append("[").append(t.getInfo().getTitle()).append("](").append(uri).append(") ")
+                    .append("[").append(display).append("](").append(uri).append(") ")
                     .append("`").append(formatTime(t.getInfo().getLength())).append("`\n");
 
             buttons.add(Button.primary("search:" + uri, String.valueOf(i + 1)));
         }
 
         eb.setDescription(desc.toString());
-        List<Button> controls = List.of(Button.danger("search:cancel", "Cancel ❌"));
+        List<Button> controls = List.of(Button.danger("search:cancel", "Cancel"));
 
         event.getHook().sendMessageEmbeds(eb.build())
                 .setComponents(ActionRow.of(buttons), ActionRow.of(controls))

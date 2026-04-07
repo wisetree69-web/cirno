@@ -15,7 +15,7 @@ public class VoiceEventHandler extends ListenerAdapter {
     private static final Logger log = LoggerFactory.getLogger(VoiceEventHandler.class);
     private final PlayerManager playerManager;
 
-    // Таймер для отложенного выхода (чтобы не ливать мгновенно при мисклике)
+    // Timer for delayed disconnect (grace period for misclicks)
     private final ScheduledExecutorService leaver = Executors.newSingleThreadScheduledExecutor();
 
     public VoiceEventHandler(PlayerManager playerManager) {
@@ -26,19 +26,29 @@ public class VoiceEventHandler extends ListenerAdapter {
     public void onGuildVoiceUpdate(GuildVoiceUpdateEvent event) {
         Guild guild = event.getGuild();
 
-        // Нас интересует канал, который покинули (Channel Left)
+        // Track which channel was left
         var channelLeft = event.getChannelLeft();
+        var channelJoined = event.getChannelJoined();
 
-        if (channelLeft == null) return; // Это был просто вход в канал, игнорируем
+        // If the bot itself was dragged to another channel by an admin
+        var member = event.getMember();
+        if (member != null && member == guild.getSelfMember() && channelJoined != null) {
+            log.info("Bot moved to voice channel: {}", channelJoined.getName());
+            return;
+        }
 
-        // Проверяем: Бот вообще подключен к этому серверу?
+        if (channelLeft == null) return;
+
+        // Ignore non-bot members leaving
+
+        // Check if bot is connected to this specific channel
         var selfVoiceState = guild.getSelfMember().getVoiceState();
         if (selfVoiceState == null || !selfVoiceState.inAudioChannel()) return;
 
-        // Проверяем: Бот находится именно в том канале, откуда кто-то вышел?
+        // Bot must be in the same channel that was left
         if (selfVoiceState.getChannel().getIdLong() != channelLeft.getIdLong()) return;
 
-        // Считаем людей (не ботов)
+        // Count humans (not bots)
         long humanCount = channelLeft.getMembers().stream()
                 .filter(m -> !m.getUser().isBot())
                 .count();
@@ -46,9 +56,9 @@ public class VoiceEventHandler extends ListenerAdapter {
         if (humanCount == 0) {
             log.info("Channel empty in guild {}. Scheduling disconnect...", guild.getName());
 
-            // Ждем 30 секунд. Если никто не вернулся — ливаем.
+            // Wait 30 seconds. If nobody returns — disconnect.
             leaver.schedule(() -> {
-                // ПОВТОРНАЯ ПРОВЕРКА (вдруг кто-то зашел за эти 30 сек)
+                // Re-check (maybe someone rejoined during the 30s window)
                 long currentHumans = channelLeft.getMembers().stream()
                         .filter(m -> !m.getUser().isBot())
                         .count();
@@ -65,14 +75,14 @@ public class VoiceEventHandler extends ListenerAdapter {
     private void disconnectAndClean(Guild guild) {
         log.info("Leaving guild {} due to inactivity.", guild.getName());
 
-        // 1. Чистим музыку и дэшборд
+        // 1. Clean up music and dashboard
         var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
         musicManager.destroy();
 
-        // 2. Рвем соединение JDA
+        // 2. Close JDA audio connection
         guild.getAudioManager().closeAudioConnection();
 
-        // 3. Рвем соединение Lavalink (уничтожаем плеер на сервере)
+        // 3. Destroy Lavalink link (kill player on server)
         playerManager.getClient().getOrCreateLink(guild.getIdLong()).destroy().subscribe();
     }
 }

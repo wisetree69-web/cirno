@@ -3,7 +3,6 @@ package ru.wisetree.cirno.ui;
 import dev.arbjerg.lavalink.client.player.Track;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
-// НОВЫЕ ИМПОРТЫ JDA
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
@@ -17,7 +16,10 @@ import java.util.concurrent.TimeUnit;
 public class DashboardRenderer {
 
     private static final Color CIRNO_COLOR = new Color(153, 204, 255);
-    private static final String CIRNO_IMG_IDLE = "https://media.tenor.com/iPKa5SFvaKAAAAAi/touhou-cirno.gif";
+    private static final String CIRNO_IMG = "https://media.tenor.com/Mw3fsm5V-loAAAAi/cirno-fumo.gif";
+    private static final int PROGRESS_BARS = 18;
+    private static final int QUEUE_TRUNCATE = 45;
+    private static final int LOG_TRUNCATE = 40;
 
     public MessageEditData render(TrackScheduler scheduler, List<String> logEntries) {
         Track current = scheduler.getCurrentTrack();
@@ -25,46 +27,66 @@ public class DashboardRenderer {
 
         EmbedBuilder eb = new EmbedBuilder();
         eb.setColor(CIRNO_COLOR);
-        eb.setThumbnail(CIRNO_IMG_IDLE);
 
         if (current == null) {
-            eb.setTitle("⑨ Cirno Music: IDLE");
-            eb.setDescription("❄️ Queue is empty! Use **Quick Load** or **Deep Search** below!");
+            eb.setThumbnail(CIRNO_IMG);
+            eb.setTitle("Cirno Music — IDLE");
+            eb.setDescription("Queue is empty. Use **Quick Load** or **Search** below.");
         } else {
-            String statusIcon = isPaused ? "II (FROZEN)" : "▶ (PLAYING)";
-            eb.setTitle("⑨ " + statusIcon + ": " + current.getInfo().getTitle(), current.getInfo().getUri());
+            String displayTitle = TrackScheduler.getDisplayTitle(current);
+
+            // Truncate title to single line
+            if (displayTitle.length() > 55) {
+                displayTitle = displayTitle.substring(0, 52) + "…";
+            }
+
+            // Always use the same thumbnail GIF for consistency
+            eb.setThumbnail(CIRNO_IMG);
+
+            eb.setTitle(displayTitle, current.getInfo().getUri());
             eb.setDescription(buildProgressBar(scheduler));
-            eb.addField("Author", current.getInfo().getAuthor(), true);
-            eb.addField("Source", current.getInfo().getSourceName(), true);
-            eb.addField("Flow Mode", scheduler.isFlowMode() ? "✅ ON" : "❌ OFF", true);
+
+            // Three inline fields: Author | Source | Status
+            String author = current.getInfo().getAuthor();
+            String source = current.getInfo().getSourceName();
+            String status = isPaused ? "Paused" : "Playing";
+            eb.addField("Author", author.length() > 18 ? author.substring(0, 17) + "…" : author, true);
+            eb.addField("Source", source, true);
+            eb.addField("Status", status, true);
         }
 
+        // System Log — show last 12 entries, truncated to fit code block
         StringBuilder logBuilder = new StringBuilder();
-        logBuilder.append("```diff\n");
-        int start = Math.max(0, logEntries.size() - 8);
+        logBuilder.append("```\n");
+        int start = Math.max(0, logEntries.size() - 12);
         for (int i = start; i < logEntries.size(); i++) {
-            logBuilder.append(logEntries.get(i)).append("\n");
+            String entry = logEntries.get(i);
+            logBuilder.append(trim(entry, 42)).append("\n");
         }
-        if (logEntries.isEmpty()) logBuilder.append("- No recent activity -");
+        if (logEntries.isEmpty()) logBuilder.append("No recent activity.");
         logBuilder.append("```");
-        eb.addField("🧊 System Log", logBuilder.toString(), false);
+        eb.addField("System Log", logBuilder.toString(), false);
 
+        // Queue — enumerated, compact
         StringBuilder queueBuilder = new StringBuilder();
         List<Track> queue = scheduler.getQueueList();
         if (!queue.isEmpty()) {
-            int limit = Math.min(3, queue.size());
+            int limit = Math.min(5, queue.size());
             for (int i = 0; i < limit; i++) {
+                String trackTitle = TrackScheduler.getDisplayTitle(queue.get(i));
                 queueBuilder.append("`").append(i + 1).append(".` ")
-                        .append(trim(queue.get(i).getInfo().getTitle())).append("\n");
+                        .append(trim(trackTitle, QUEUE_TRUNCATE)).append("\n");
             }
-            if (queue.size() > 3) queueBuilder.append("*...and ").append(queue.size() - 3).append(" more*");
+            if (queue.size() > 5) {
+                queueBuilder.append("...and ").append(queue.size() - 5).append(" more.");
+            }
         } else {
-            queueBuilder.append("*Empty... like my head!*");
+            queueBuilder.append("*Empty*");
         }
         eb.addField("Next Up", queueBuilder.toString(), false);
-        eb.setFooter("CirnoBot v9.9.9 | The Strongest UI");
 
         return new MessageEditBuilder()
+                .setContent(null)
                 .setEmbeds(eb.build())
                 .setComponents(createButtons(scheduler))
                 .build();
@@ -107,10 +129,9 @@ public class DashboardRenderer {
         long duration = track.getInfo().getLength();
         long position = scheduler.getPosition();
         if (duration == Long.MAX_VALUE) return "🔴 **LIVE STREAM**";
-        int totalBars = 15;
-        long progress = (duration > 0) ? (position * totalBars) / duration : 0;
+        long progress = (duration > 0) ? (position * PROGRESS_BARS) / duration : 0;
         StringBuilder sb = new StringBuilder("`").append(formatTime(position)).append(" `");
-        for (int i = 0; i < totalBars; i++) {
+        for (int i = 0; i < PROGRESS_BARS; i++) {
             if (i == progress) sb.append("🔘"); else sb.append("▬");
         }
         sb.append("` ").append(formatTime(duration)).append("`");
@@ -123,7 +144,7 @@ public class DashboardRenderer {
                 TimeUnit.MILLISECONDS.toSeconds(millis) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis)));
     }
 
-    private String trim(String text) {
-        return (text.length() > 30) ? text.substring(0, 30 - 1) + "…" : text;
+    private String trim(String text, int maxLen) {
+        return (text.length() > maxLen) ? text.substring(0, maxLen - 1) + "…" : text;
     }
 }

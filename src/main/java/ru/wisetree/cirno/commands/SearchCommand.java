@@ -35,7 +35,7 @@ public class SearchCommand implements Command {
     public String getName() { return "search"; }
 
     @Override
-    public String getDescription() { return "Search for a track and pick with buttons! ⑨"; }
+    public String getDescription() { return "Search for a track and pick with buttons."; }
 
     @Override
     public void execute(SlashCommandInteractionEvent event) {
@@ -63,7 +63,7 @@ public class SearchCommand implements Command {
                     }
 
                     EmbedBuilder eb = new EmbedBuilder();
-                    eb.setTitle("⑨ Search Results: " + query);
+                    eb.setTitle("Search Results: " + query);
                     eb.setColor(CIRNO_BLUE);
                     eb.setFooter("Select a track or click Cancel");
 
