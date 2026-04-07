@@ -8,11 +8,13 @@ services:
       - "127.0.0.1:2333:2333"
     volumes:
       - ./lavalink/application.yaml:/opt/Lavalink/application.yaml
-    entrypoint: java -Xmx1G -XX:+UseZGC -jar Lavalink.jar --lavalink.server.password=${LAVALINK_PASSWORD} 
-    ulimits:
-      nice:
-        soft: -15
-        hard: -15
+    entrypoint: java -Xmx1G -XX:+UseZGC -jar Lavalink.jar
+    environment:
+      - LAVALINK_PASSWORD=${LAVALINK_PASSWORD}
+      - YOUTUBE_REFRESH_TOKEN=${YOUTUBE_REFRESH_TOKEN}
+      - DEEZER_ARL=${DEEZER_ARL}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
     deploy:
       resources:
         limits:
@@ -25,9 +27,11 @@ services:
     cpu_shares: 512
     depends_on:
       - lavalink
+    profiles:
+      - prod
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
-      - LAVALINK_URI=ws://lavalink:2333
+      - LAVALINK_URI=${LAVALINK_URI}
       - LAVALINK_PASSWORD=${LAVALINK_PASSWORD}
     deploy:
       resources:

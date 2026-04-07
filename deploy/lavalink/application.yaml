@@ -5,14 +5,20 @@ server:
     enabled: false
 
 lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.0"
+      repository: "https://maven.lavalink.dev/releases"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
+      repository: "https://maven.topi.wtf/releases"
   server:
+    password: "${LAVALINK_PASSWORD}"
     sources:
       youtube: false
-      bandcamp: true
+      bandcamp: false
       soundcloud: true
-      twitch: true
-      vimeo: true
-      http: true
+      twitch: false
+      vimeo: false
+      http: false
       local: false
     filters:
       volume: true
@@ -27,7 +33,7 @@ lavalink:
       lowPass: false
     http:
       responseCache: false
-    bufferDurationMs: 600
+    bufferDurationMs: 400
     frameBufferDurationMs: 5000
     opusEncodingQuality: 8
     resamplingQuality: LOW
@@ -37,13 +43,8 @@ lavalink:
     playerUpdateInterval: 5
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true
+    soundcloudFilterOutPreviewTracks: true
     gc-warnings: true
-
-  plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.0"
-      repository: "https://maven.lavalink.dev/releases" 
-    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
-      repository: "https://maven.topi.wtf/releases"
 
 metrics:
   prometheus:
