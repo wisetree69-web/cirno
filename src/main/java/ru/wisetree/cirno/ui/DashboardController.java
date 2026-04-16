@@ -48,6 +48,9 @@ public class DashboardController implements SchedulerEventListener {
             stopTicker();
         }
 
+        // Clear old logs on fresh spawn
+        logHistory.clear();
+
         idleSecondsCounter.set(0);
         addLog("🤡 Spawned Cirno", userName);
 

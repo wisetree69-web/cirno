@@ -31,7 +31,8 @@ public class TrackScheduler {
     private final BlockingQueue<QueuedTrack> queue;
     private final List<SchedulerEventListener> listeners;
 
-    private boolean flowMode = false;
+    private boolean flowMode = true;
+    private String flowSource = "youtube";
     private Track lastPlayedTrack;
     private Track currentTrack;
 
@@ -202,7 +203,12 @@ public class TrackScheduler {
         lastPlayedTrack = null;
         currentTrack = null;
         stopPlayer();
-        messageListeners("🧹 Queue cleared", MessageType.INFO, userName);
+        
+        if (userName != null) {
+            messageListeners("🧹 Queue cleared", MessageType.INFO, userName);
+        } else {
+            messageListeners("🤖 Bot stopped", MessageType.INFO);
+        }
     }
 
     public synchronized void shuffle(String userName) {
@@ -252,105 +258,66 @@ public class TrackScheduler {
             playedIdentifiers.add(qt.track.getInfo().getIdentifier());
         }
 
-        // Take last 5 user-queued tracks from history
-        int take = Math.min(5, flowHistory.size());
-        List<Track> seeds = new ArrayList<>(flowHistory.subList(flowHistory.size() - take, flowHistory.size()));
-        Collections.shuffle(seeds);
+        // Take the last suggested track
+        Track lastSeed = flowHistory.get(flowHistory.size() - 1);
+        String identifier = lastSeed.getInfo().getIdentifier();
+        String artist = lastSeed.getInfo().getAuthor();
+        String title = getDisplayTitle(lastSeed);
 
-        // Load all 5 mixes concurrently, combine results
-        List<Track> combined = new ArrayList<>();
-        final Object lock = new Object();
-        final int[] pending = {seeds.size()};
-        final boolean[] finalized = {false};
+        // Build query based on configured flow source
+        String query = switch (flowSource) {
+            case "youtube" -> "https://www.youtube.com/watch?v=" + identifier + "&list=RD" + identifier;
+            case "spotify" -> "sprec:mix:track:" + identifier;
+            case "deezer" -> "dzrec:" + identifier;
+            default -> "ytsearch:" + (artist != null && !artist.isEmpty() ? artist + " - " : "") + title;
+        };
 
-        for (Track seed : seeds) {
-            String source = seed.getInfo().getSourceName();
-            String identifier = seed.getInfo().getIdentifier();
-            String artist = seed.getInfo().getAuthor();
-            String title = getDisplayTitle(seed);
+        log.info("Flow: Loading mix ({}) based on {} — {}", flowSource, getDisplayTitle(lastSeed), query);
 
-            String query = switch (source) {
-                case "youtube" -> "https://www.youtube.com/watch?v=" + identifier + "&list=RD" + identifier;
-                default -> "ytsearch:" + artist + " - " + title;
-            };
+        link.loadItem(query).subscribe(result -> {
+            List<Track> recommendations = extractAndDedup(result, playedIdentifiers);
 
-            final String finalQuery = query;
-            link.loadItem(query).subscribe(result -> {
-                List<Track> fromSeed = new ArrayList<>();
-                synchronized (lock) {
-                    if (result instanceof PlaylistLoaded playlist) {
-                        for (Track track : playlist.getTracks()) {
-                            if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
-                                playedIdentifiers.add(track.getInfo().getIdentifier());
-                                fromSeed.add(track);
-                            }
-                        }
-                    } else if (result instanceof TrackLoaded trackLoaded) {
-                        if (!playedIdentifiers.contains(trackLoaded.getTrack().getInfo().getIdentifier())) {
-                            fromSeed.add(trackLoaded.getTrack());
-                        }
-                    } else if (result instanceof SearchResult sr && !sr.getTracks().isEmpty()) {
-                        if (!"youtube".equals(source)) {
-                            // Convert search result to a full mix
-                            Track ytVersion = sr.getTracks().getFirst();
-                            String ytId = ytVersion.getInfo().getIdentifier();
-                            String mixUrl = "https://www.youtube.com/watch?v=" + ytId + "&list=RD" + ytId;
-                            var mixResult = link.loadItem(mixUrl).block();
-                            if (mixResult instanceof PlaylistLoaded mixPlaylist) {
-                                for (Track track : mixPlaylist.getTracks()) {
-                                    if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
-                                        playedIdentifiers.add(track.getInfo().getIdentifier());
-                                        fromSeed.add(track);
-                                    }
-                                }
-                            }
-                        } else {
-                            for (Track track : sr.getTracks()) {
-                                if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
-                                    fromSeed.add(track);
-                                }
-                            }
-                        }
-                    }
+            if (!recommendations.isEmpty()) {
+                Collections.shuffle(recommendations);
+                for (Track track : recommendations) {
+                    offerToQueue(track, true, userName);
                 }
+                messageListeners("🌊 Added " + recommendations.size() + " tracks", MessageType.SUCCESS, userName);
+                nextTrack();
+            } else {
+                messageListeners("🌊 No new tracks found", MessageType.INFO, userName);
+            }
+        }, err -> {
+            log.warn("Flow mix load failed: {}", err.getMessage());
+            messageListeners("🌊 Flow mix load failed", MessageType.INFO, userName);
+        });
+    }
 
-                synchronized (lock) {
-                    combined.addAll(fromSeed);
-                    pending[0]--;
-                    if (pending[0] == 0 && !finalized[0]) {
-                        finalized[0] = true;
-                        Collections.shuffle(combined);
-                        for (Track track : combined) {
-                            offerToQueue(track, true, userName);
-                        }
-                        if (!combined.isEmpty()) {
-                            messageListeners("🌊 Added " + combined.size() + " tracks", MessageType.SUCCESS, userName);
-                            nextTrack();
-                        } else {
-                            messageListeners("🌊 No new tracks found", MessageType.INFO, userName);
-                        }
-                    }
+    private List<Track> extractAndDedup(Object result, Set<String> playedIdentifiers) {
+        List<Track> tracks = new ArrayList<>();
+
+        if (result instanceof SearchResult sr) {
+            for (Track track : sr.getTracks()) {
+                if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
+                    playedIdentifiers.add(track.getInfo().getIdentifier());
+                    tracks.add(track);
                 }
-            }, err -> {
-                log.warn("Flow mix load failed for {}: {}", finalQuery, err.getMessage());
-                synchronized (lock) {
-                    pending[0]--;
-                    if (pending[0] == 0 && !finalized[0]) {
-                        finalized[0] = true;
-                        Collections.shuffle(combined);
-                        for (Track track : combined) {
-                            offerToQueue(track, true, userName);
-                        }
-                        if (!combined.isEmpty()) {
-                            messageListeners("🌊 Added " + combined.size() + " tracks", MessageType.SUCCESS, userName);
-                            nextTrack();
-                        } else {
-                            messageListeners("🌊 No new tracks found", MessageType.INFO, userName);
-                        }
-                    }
+            }
+        } else if (result instanceof PlaylistLoaded playlist) {
+            for (Track track : playlist.getTracks()) {
+                if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
+                    playedIdentifiers.add(track.getInfo().getIdentifier());
+                    tracks.add(track);
                 }
-            });
+            }
+        } else if (result instanceof TrackLoaded trackLoaded) {
+            Track track = trackLoaded.getTrack();
+            if (!playedIdentifiers.contains(track.getInfo().getIdentifier())) {
+                tracks.add(track);
+            }
         }
+
+        return tracks;
     }
 
     // Исправлено: неблокирующий вызов
@@ -375,6 +342,14 @@ public class TrackScheduler {
 
     public void setLastPlayedTrack(Track track) {
         this.lastPlayedTrack = track;
+    }
+
+    public String getFlowSource() {
+        return flowSource;
+    }
+
+    public void setFlowSource(String source) {
+        this.flowSource = source;
     }
 
     public BlockingQueue<Track> getQueue() {

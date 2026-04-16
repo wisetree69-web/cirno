@@ -59,6 +59,10 @@ public class PlayerManager {
         });
     }
 
+    public void removeGuildMusicManager(long guildId) {
+        musicManagers.remove(guildId);
+    }
+
     public LavalinkClient getClient() {
         return client;
     }

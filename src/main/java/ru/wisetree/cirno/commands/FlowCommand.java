@@ -31,10 +31,10 @@ public class FlowCommand implements Command {
         var scheduler = playerManager.getGuildMusicManager(guild.getIdLong()).getScheduler();
 
         boolean newState = !scheduler.isFlowMode();
-        scheduler.setFlowMode(newState);
+        scheduler.setFlowMode(newState, event.getUser().getName());
 
-        String status = newState ? "ON ✅" : "OFF ❌";
-        event.reply("Flow Mode is **" + status + "**! The Ice Radio is ready! 🧊").queue();
+        String status = newState ? "enabled ✅" : "disabled ❌";
+        event.reply("🌊 Flow Mode " + status + "!").queue();
     }
 
     @Override

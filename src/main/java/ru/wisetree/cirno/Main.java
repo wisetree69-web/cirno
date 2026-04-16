@@ -31,6 +31,7 @@ public class Main {
                 new PlayCommand(playerManager, voiceService),
                 new SkipCommand(playerManager),
                 new FlowCommand(playerManager),
+                new FlowSourceCommand(playerManager),
                 new BegoneCommand(playerManager),
                 new PauseCommand(playerManager),
                 new StopCommand(playerManager),

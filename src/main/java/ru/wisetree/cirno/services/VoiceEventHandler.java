@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.events.guild.voice.GuildVoiceUpdateEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ru.wisetree.cirno.GuildMusicManager;
 import ru.wisetree.cirno.PlayerManager;
 
 import java.util.concurrent.Executors;
@@ -75,14 +76,19 @@ public class VoiceEventHandler extends ListenerAdapter {
     private void disconnectAndClean(Guild guild) {
         log.info("Leaving guild {} due to inactivity.", guild.getName());
 
+        long guildId = guild.getIdLong();
+        
         // 1. Clean up music and dashboard
-        var musicManager = playerManager.getGuildMusicManager(guild.getIdLong());
+        GuildMusicManager musicManager = playerManager.getGuildMusicManager(guildId);
         musicManager.destroy();
+        
+        // 2. Remove from map so next spawn creates fresh instance
+        playerManager.removeGuildMusicManager(guildId);
 
-        // 2. Close JDA audio connection
+        // 3. Close JDA audio connection
         guild.getAudioManager().closeAudioConnection();
 
-        // 3. Destroy Lavalink link (kill player on server)
-        playerManager.getClient().getOrCreateLink(guild.getIdLong()).destroy().subscribe();
+        // 4. Destroy Lavalink link (kill player on server)
+        playerManager.getClient().getOrCreateLink(guildId).destroy().subscribe();
     }
 }
